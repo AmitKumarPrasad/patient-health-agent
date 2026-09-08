@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=78,<81"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "patient-health-agent-api"
 version = "0.1.0"
@@ -20,6 +24,10 @@ dependencies = [
     "python-multipart>=0.0.20,<1.0",
     "pypdf>=5.0,<7.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*"]
 
 [dependency-groups]
 dev = [
