@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5.6-luna"
     tavily_api_key: str | None = None
 
+    keycloak_issuer_url: str = "http://localhost:8080/realms/patient-health"
+    keycloak_jwks_url: str = "http://keycloak:8080/realms/patient-health/protocol/openid-connect/certs"
+    keycloak_audience: str | None = None
+
     @property
     def database_url(self) -> str:
         return (
