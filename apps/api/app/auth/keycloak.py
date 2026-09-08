@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from time import monotonic
 from typing import Any
 
 import httpx
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from app.config import settings
@@ -12,17 +12,35 @@ from app.config import settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+_jwks_cache: dict[str, Any] | None = None
+_jwks_cached_at = 0.0
+
 
 def _get_jwks() -> dict[str, Any]:
+    global _jwks_cache, _jwks_cached_at
+    now = monotonic()
+    if _jwks_cache is not None and now - _jwks_cached_at < settings.keycloak_jwks_cache_ttl_seconds:
+        return _jwks_cache
+
     try:
         response = httpx.get(settings.keycloak_jwks_url, timeout=5.0)
         response.raise_for_status()
-    except httpx.HTTPError as exc:
+        jwks = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication provider is unavailable",
         ) from exc
-    return response.json()
+
+    if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication provider returned invalid signing keys",
+        )
+
+    _jwks_cache = jwks
+    _jwks_cached_at = now
+    return jwks
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
