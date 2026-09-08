@@ -14,6 +14,23 @@ test("patient can sign in, find a provider, book, list, and cancel an appointmen
   await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Find a provider" })).toBeVisible();
 
+  const records = page.locator("#records");
+  const fileInput = records.locator("#record-file");
+  await fileInput.setInputFiles({
+    name: "e2e-record.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic E2E patient record for upload testing."),
+  });
+  await records.getByPlaceholder("Category, e.g. lab report").fill("E2E test record");
+  await records.getByPlaceholder("Short description (optional)").fill("Synthetic upload used by Playwright.");
+  await records.getByRole("button", { name: "Upload record" }).click();
+  await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
+  await expect(records.getByText("E2E test record", { exact: true })).toBeVisible();
+
+  await records.getByPlaceholder("Search filename, category or description").fill("e2e-record.txt");
+  await records.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
+
   const providers = page.locator("#providers");
   await page.getByPlaceholder("Specialty, e.g. cardiology").fill("General Medicine");
   await providers.getByRole("button", { name: "Search", exact: true }).click();
