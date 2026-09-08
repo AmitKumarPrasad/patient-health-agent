@@ -17,6 +17,7 @@ from app.services.documents import (
     download_document,
     upload_document,
 )
+from app.services.record_tools import _metadata
 
 
 def test_safe_filename_strips_path_and_unsafe_characters() -> None:
@@ -49,6 +50,30 @@ def test_content_signature_rejects_mismatched_binary_type(
 ) -> None:
     with pytest.raises(ValueError, match="does not match its declared type"):
         _validate_content_signature(content_type, content)
+
+
+def test_record_search_metadata_matches_document_ui_contract() -> None:
+    document = PatientDocument(
+        patient_id=1,
+        object_key="patients/1/demo/report.txt",
+        original_filename="report.txt",
+        content_type="text/plain",
+        size_bytes=123,
+        sha256="abc123",
+        category="lab report",
+        description="Synthetic report",
+    )
+
+    assert _metadata(document) == {
+        "id": str(document.id),
+        "original_filename": "report.txt",
+        "content_type": "text/plain",
+        "size_bytes": "123",
+        "sha256": "abc123",
+        "category": "lab report",
+        "description": "Synthetic report",
+        "created_at": "",
+    }
 
 
 def test_upload_document_stores_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
