@@ -13,6 +13,7 @@ from app.services.documents import (
     ALLOWED_CONTENT_TYPES,
     MAX_DOCUMENT_BYTES,
     _safe_filename,
+    _validate_content_signature,
     download_document,
     upload_document,
 )
@@ -26,6 +27,28 @@ def test_document_policy_allows_demo_types_and_caps_size() -> None:
     assert "application/pdf" in ALLOWED_CONTENT_TYPES
     assert "image/png" in ALLOWED_CONTENT_TYPES
     assert MAX_DOCUMENT_BYTES == 10 * 1024 * 1024
+
+
+def test_content_signature_matches_allowed_binary_types() -> None:
+    _validate_content_signature("application/pdf", b"%PDF-1.7\n")
+    _validate_content_signature("image/png", b"\x89PNG\r\n\x1a\n")
+    _validate_content_signature("image/jpeg", b"\xff\xd8\xff\xe0")
+    _validate_content_signature("text/plain", b"hello")
+
+
+@pytest.mark.parametrize(
+    ("content_type", "content"),
+    [
+        ("application/pdf", b"not a pdf"),
+        ("image/png", b"not a png"),
+        ("image/jpeg", b"not a jpeg"),
+    ],
+)
+def test_content_signature_rejects_mismatched_binary_type(
+    content_type: str, content: bytes
+) -> None:
+    with pytest.raises(ValueError, match="does not match its declared type"):
+        _validate_content_signature(content_type, content)
 
 
 def test_upload_document_stores_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -66,6 +89,36 @@ def test_upload_document_stores_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
 
         assert document.sha256 == hashlib.sha256(b"hello").hexdigest()
         assert document.size_bytes == 5
+
+
+def test_upload_document_rejects_mismatched_binary_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[Patient.__table__, PatientDocument.__table__])
+
+    with Session(engine) as db:
+        patient = Patient(first_name="Test", last_name="Patient")
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+        with pytest.raises(ValueError, match="does not match its declared type"):
+            upload_document(
+                db,
+                patient,
+                filename="fake.pdf",
+                content_type="application/pdf",
+                content=b"plain text pretending to be pdf",
+                category=None,
+                description=None,
+            )
+
+    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: None)
 
 
 def test_download_document_rejects_tampered_content(monkeypatch: pytest.MonkeyPatch) -> None:
