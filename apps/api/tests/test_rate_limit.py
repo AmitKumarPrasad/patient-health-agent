@@ -7,12 +7,15 @@ from app.config import settings
 from app.middleware.rate_limit import FixedWindowRateLimitMiddleware, MAX_TRACKED_CLIENTS
 
 
-def _request(path: str, host: str = "127.0.0.1") -> Request:
+def _request(path: str, host: str = "127.0.0.1", forwarded_for: str | None = None) -> Request:
+    headers = []
+    if forwarded_for is not None:
+        headers.append((b"x-forwarded-for", forwarded_for.encode()))
     scope = {
         "type": "http",
         "method": "GET",
         "path": path,
-        "headers": [],
+        "headers": headers,
         "query_string": b"",
         "client": (host, 12345),
         "server": ("testserver", 80),
@@ -102,3 +105,21 @@ def test_rate_limit_removes_stale_clients_before_capacity_eviction(monkeypatch) 
     assert "10.0.0.1" not in middleware._windows
     assert "10.0.0.2" in middleware._windows
     assert "10.0.0.3" in middleware._windows
+
+
+def test_forwarded_for_is_ignored_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "rate_limit_trust_forwarded_for", False)
+    request = _request("/api/example", host="10.0.0.1", forwarded_for="192.0.2.10")
+
+    assert FixedWindowRateLimitMiddleware._client_key(request) == "10.0.0.1"
+
+
+def test_first_forwarded_for_hop_is_used_when_trusted(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "rate_limit_trust_forwarded_for", True)
+    request = _request(
+        "/api/example",
+        host="10.0.0.1",
+        forwarded_for="192.0.2.10, 198.51.100.4",
+    )
+
+    assert FixedWindowRateLimitMiddleware._client_key(request) == "192.0.2.10"
