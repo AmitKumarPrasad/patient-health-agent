@@ -56,8 +56,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
-      - name: Start E2E services
-        run: docker compose up -d --build postgres keycloak mailpit minio api web
+      - name: Start E2E dependencies
+        run: docker compose up -d --build postgres keycloak mailpit minio api
+      - name: Wait for API readiness
+        run: curl --fail --retry 60 --retry-delay 2 --retry-connrefused http://127.0.0.1:8000/ready
+      - name: Start E2E web service
+        run: docker compose up -d --build web
       - name: Wait for web application
         run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:3000/
       - name: Install Playwright Chromium
