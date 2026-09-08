@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from time import monotonic
 from uuid import uuid4
 
@@ -8,12 +9,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 
+logger = logging.getLogger(__name__)
 REQUEST_ID_HEADER = "X-Request-ID"
 PROCESS_TIME_HEADER = "X-Process-Time-Ms"
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Attach correlation and lightweight request-duration metadata to responses."""
+    """Attach correlation and lightweight request observability metadata."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = str(uuid4())
@@ -23,4 +25,17 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         elapsed_ms = max(0, round((monotonic() - started_at) * 1000))
         response.headers.setdefault(REQUEST_ID_HEADER, request_id)
         response.headers.setdefault(PROCESS_TIME_HEADER, str(elapsed_ms))
+
+        route = request.scope.get("route")
+        route_template = getattr(route, "path", request.url.path)
+        logger.info(
+            "http_request_completed",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "route": route_template,
+                "status_code": response.status_code,
+                "duration_ms": elapsed_ms,
+            },
+        )
         return response
