@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from io import BytesIO
 from pathlib import Path
@@ -69,6 +70,7 @@ def upload_document(
     if len(content) > MAX_DOCUMENT_BYTES:
         raise ValueError("Document exceeds the 10 MB limit")
 
+    sha256 = hashlib.sha256(content).hexdigest()
     client = get_storage_client()
     ensure_bucket(client)
 
@@ -79,6 +81,7 @@ def upload_document(
         original_filename=safe_name,
         content_type=content_type,
         size_bytes=len(content),
+        sha256=sha256,
         category=category,
         description=description,
     )
@@ -118,12 +121,16 @@ def download_document(db: Session, patient: Patient, document_id: UUID) -> tuple
     try:
         response = client.get_object(settings.minio_bucket, document.object_key)
         try:
-            return document, response.read()
+            content = response.read()
         finally:
             response.close()
             response.release_conn()
     except Exception as exc:  # noqa: BLE001 - normalize storage errors at service boundary.
         raise RuntimeError("Unable to read document from object storage") from exc
+
+    if document.sha256 is not None and hashlib.sha256(content).hexdigest() != document.sha256:
+        raise RuntimeError("Stored document integrity check failed")
+    return document, content
 
 
 def delete_document(db: Session, patient: Patient, document_id: UUID) -> None:
