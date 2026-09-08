@@ -34,6 +34,7 @@
   ],
   "users": [
     {
+      "id": "7f7d4cc2-8c35-4e7c-a1e2-5b5d1c01a101",
       "username": "demo.patient",
       "enabled": true,
       "firstName": "Demo",
@@ -46,6 +47,7 @@
       "realmRoles": ["patient"]
     },
     {
+      "id": "7f7d4cc2-8c35-4e7c-a1e2-5b5d1c01a102",
       "username": "demo.provider",
       "enabled": true,
       "firstName": "Demo",
@@ -58,6 +60,7 @@
       "realmRoles": ["provider"]
     },
     {
+      "id": "7f7d4cc2-8c35-4e7c-a1e2-5b5d1c01a103",
       "username": "demo.admin",
       "enabled": true,
       "firstName": "Demo",
