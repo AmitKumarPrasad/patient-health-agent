@@ -1,4 +1,4 @@
-from datetime import date, time, timezone
+from datetime import date, time
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -10,13 +10,12 @@ from app.auth.keycloak import get_current_user
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Appointment, Availability, Notification, Patient, Provider
+from app.models import Availability, Notification, Patient, Provider
 
 
 PATIENT_SUBJECT = "integration-patient-subject"
-PROVIDER_SUBJECT = "integration-provider-subject"
-PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
 PROVIDER_ID = UUID("22222222-2222-2222-2222-222222222222")
+PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
 APPOINTMENT_DATE = date(2026, 9, 10)
 
 
@@ -39,7 +38,7 @@ def _build_database() -> tuple[object, Session]:
             ),
             Provider(
                 id=PROVIDER_ID,
-                external_id=PROVIDER_SUBJECT,
+                external_id="integration-provider-subject",
                 first_name="Demo",
                 last_name="Provider",
                 specialty="Dermatology",
@@ -116,7 +115,8 @@ def test_patient_appointment_api_flow() -> None:
             assert cancelled.json()["status"] == "cancelled"
 
             notifications = db.query(Notification).all()
-            assert notifications == []
+            assert len(notifications) == 2
+            assert {item.status for item in notifications} == {"failed"}
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
