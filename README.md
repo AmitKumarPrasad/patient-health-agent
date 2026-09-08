@@ -68,4 +68,4 @@ This repository is for development/demo purposes. Do not use real patient or cli
 
 ## Dependency reproducibility
 
-The frontend dependencies are pinned by `apps/web/package-lock.json`, and CI installs them with `npm ci`.
+The frontend dependency graph is committed in `apps/web/package-lock.json`, and CI uses `npm ci` so dependency resolution is reproducible from the lockfile.
