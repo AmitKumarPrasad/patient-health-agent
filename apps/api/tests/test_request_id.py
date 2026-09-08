@@ -34,3 +34,23 @@ def test_request_id_header_is_returned_on_error_response() -> None:
     assert response.status_code == 404
     assert request_id is not None
     UUID(request_id)
+
+
+def test_request_id_header_is_returned_on_unhandled_exception() -> None:
+    path = "/test-request-id-unhandled-exception"
+
+    def raise_error() -> None:
+        raise RuntimeError("test failure")
+
+    app.add_api_route(path, raise_error, methods=["GET"])
+    try:
+        with TestClient(app, raise_server_exceptions=False) as error_client:
+            response = error_client.get(path)
+    finally:
+        app.router.routes[:] = [route for route in app.router.routes if getattr(route, "path", None) != path]
+
+    request_id = response.headers.get(REQUEST_ID_HEADER)
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
+    assert request_id is not None
+    UUID(request_id)
