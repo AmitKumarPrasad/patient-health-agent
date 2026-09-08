@@ -1,0 +1,73 @@
+{
+  "realm": "patient-health",
+  "enabled": true,
+  "displayName": "Patient Health Demo",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "patient", "description": "Patient portal access" },
+      { "name": "provider", "description": "Provider portal access" },
+      { "name": "admin", "description": "Administrative access" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "patient-health-web",
+      "name": "Patient Health Web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "bearerOnly": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "demo.patient",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Patient",
+      "email": "demo.patient@example.local",
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "ChangeMe!Patient123", "temporary": false }
+      ],
+      "realmRoles": ["patient"]
+    },
+    {
+      "username": "demo.provider",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Provider",
+      "email": "demo.provider@example.local",
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "ChangeMe!Provider123", "temporary": false }
+      ],
+      "realmRoles": ["provider"]
+    },
+    {
+      "username": "demo.admin",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "email": "demo.admin@example.local",
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "ChangeMe!Admin123", "temporary": false }
+      ],
+      "realmRoles": ["admin"]
+    }
+  ]
+}
