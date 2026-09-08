@@ -41,6 +41,18 @@ export type Appointment = {
 
 export type AgentResponse = { response: string };
 
+export type PatientDocument = {
+  id: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  category: string | null;
+  description: string | null;
+  created_at: string;
+};
+
+export type RecordSearchResponse = { documents: PatientDocument[] };
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -96,4 +108,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  recordAssistant: (message: string) =>
+    request<AgentResponse>("/api/records/assistant", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+  searchRecords: (query = "") =>
+    request<RecordSearchResponse>(
+      `/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+    ),
+  documents: () => request<PatientDocument[]>("/api/documents"),
+  uploadDocument: async (file: File, category?: string, description?: string) => {
+    const keycloak = getKeycloak();
+    await keycloak.updateToken(30);
+    const form = new FormData();
+    form.append("file", file);
+    if (category?.trim()) form.append("category", category.trim());
+    if (description?.trim()) form.append("description", description.trim());
+
+    const response = await fetch(`${API_URL}/api/documents`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+      body: form,
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const detail = body?.detail ?? `Request failed with status ${response.status}`;
+      throw new Error(typeof detail === "string" ? detail : "Upload failed");
+    }
+    return response.json() as Promise<PatientDocument>;
+  },
 };
