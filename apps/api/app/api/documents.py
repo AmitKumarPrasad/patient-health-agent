@@ -31,6 +31,7 @@ class DocumentResponse(BaseModel):
     original_filename: str
     content_type: str
     size_bytes: int
+    sha256: str | None
     category: str | None
     description: str | None
     created_at: str
@@ -49,6 +50,7 @@ def _serialize(document: PatientDocument) -> DocumentResponse:
         original_filename=document.original_filename,
         content_type=document.content_type,
         size_bytes=document.size_bytes,
+        sha256=document.sha256,
         category=document.category,
         description=document.description,
         created_at=document.created_at.isoformat(),
