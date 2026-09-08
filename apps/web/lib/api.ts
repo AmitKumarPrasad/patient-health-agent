@@ -1,4 +1,4 @@
-import { getKeycloak } from "./keycloak";
+import { getKeycloak } from "../app/keycloak";
 
 export type Patient = {
   id: string;
