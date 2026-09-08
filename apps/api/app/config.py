@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,10 +23,10 @@ class Settings(BaseSettings):
     keycloak_issuer_url: str = "http://localhost:8080/realms/patient-health"
     keycloak_jwks_url: str = "http://keycloak:8080/realms/patient-health/protocol/openid-connect/certs"
     keycloak_audience: str | None = None
-    keycloak_jwks_cache_ttl_seconds: int = 300
+    keycloak_jwks_cache_ttl_seconds: int = Field(default=300, gt=0)
 
-    rate_limit_requests: int = 120
-    rate_limit_window_seconds: int = 60
+    rate_limit_requests: int = Field(default=120, ge=0)
+    rate_limit_window_seconds: int = Field(default=60, gt=0)
     rate_limit_trust_forwarded_for: bool = False
 
     smtp_host: str = "localhost"
