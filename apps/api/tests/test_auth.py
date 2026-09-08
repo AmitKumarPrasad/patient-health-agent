@@ -50,3 +50,23 @@ def test_configured_audience_is_required(monkeypatch: pytest.MonkeyPatch) -> Non
     assert decode_access_token("demo-token") == {"sub": "demo-sub"}
     assert calls["audience"] == "patient-health-api"
     assert "options" not in calls
+
+
+def test_unknown_signing_key_forces_jwks_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[bool] = []
+    refreshed = {"keys": [{"kid": "rotated-key", "kty": "RSA"}]}
+
+    monkeypatch.setattr(
+        "app.auth.keycloak.jwt.get_unverified_header",
+        lambda token: {"kid": "rotated-key"},
+    )
+
+    def fake_get_jwks(*, force_refresh: bool = False):
+        calls.append(force_refresh)
+        return {"keys": []} if not force_refresh else refreshed
+
+    monkeypatch.setattr("app.auth.keycloak._get_jwks", fake_get_jwks)
+    monkeypatch.setattr("app.auth.keycloak.jwt.decode", lambda *args, **kwargs: {"sub": "demo-sub"})
+
+    assert decode_access_token("rotated-token") == {"sub": "demo-sub"}
+    assert calls == [False, True]
