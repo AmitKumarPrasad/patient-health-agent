@@ -8,6 +8,7 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 
@@ -18,6 +19,10 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(1970, 0, 1, hours, minutes));
+}
+
+function slotTimestamp(date: string, time: string) {
+  return `${date}T${time}Z`;
 }
 
 function formatBytes(value: number) {
@@ -113,8 +118,8 @@ export default function Home() {
     try {
       await api.book({
         provider_id: selectedProvider.id,
-        starts_at: slot.start_time,
-        ends_at: slot.end_time,
+        starts_at: slotTimestamp(slot.available_date, slot.start_time),
+        ends_at: slotTimestamp(slot.available_date, slot.end_time),
         reason: reason || undefined,
       });
       setReason("");
