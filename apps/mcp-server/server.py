@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import os
+import sys
 from datetime import date, datetime
 from uuid import UUID
 
 from mcp.server.fastmcp import FastMCP
 
-import sys
 sys.path.append(os.path.abspath("../api"))
 
 from app.db.session import SessionLocal
 from app.services.appointment_tools import book_appointment, get_available_slots, search_providers
+from app.services.patient_identity import require_patient_by_external_id
 from app.services.record_tools import search_patient_documents
 
 
@@ -18,10 +19,10 @@ mcp = FastMCP("patient-health-agent")
 
 
 @mcp.tool()
-def find_providers(specialty: str = "") -> list[dict]:
+def find_providers(specialty: str) -> list[dict]:
     """Find providers using the application's validated provider search service."""
     with SessionLocal() as db:
-        return search_providers(db, specialty or None)
+        return search_providers(db, specialty)
 
 
 @mcp.tool()
@@ -51,8 +52,6 @@ def book_slot(
     reason: str = "",
 ) -> dict:
     """Book an appointment for the authenticated patient through the validated service layer."""
-    from app.services.patient_identity import require_patient_by_external_id
-
     with SessionLocal() as db:
         patient = require_patient_by_external_id(db, subject)
         return book_appointment(
