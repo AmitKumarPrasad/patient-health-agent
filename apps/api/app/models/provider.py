@@ -11,6 +11,7 @@ class Provider(Base):
     __tablename__ = "providers"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    external_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     specialty: Mapped[str] = mapped_column(String(150), index=True)
