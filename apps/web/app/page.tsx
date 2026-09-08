@@ -175,12 +175,18 @@ export default function Home() {
     setUploading(true);
     setRecordError("");
     try {
-      const document = await api.uploadDocument(selectedFile, uploadCategory, uploadDescription);
-      setDocuments((items) => [document, ...items]);
+      const uploadedDocument = await api.uploadDocument(
+        selectedFile,
+        uploadCategory,
+        uploadDescription,
+      );
+      setDocuments((items) => [uploadedDocument, ...items]);
       setSelectedFile(null);
       setUploadCategory("");
       setUploadDescription("");
-      const fileInput = document.getElementById("record-file") as HTMLInputElement | null;
+      const fileInput = window.document.getElementById(
+        "record-file",
+      ) as HTMLInputElement | null;
       if (fileInput) fileInput.value = "";
     } catch (err) {
       setRecordError(err instanceof Error ? err.message : "Unable to upload record");
@@ -310,14 +316,14 @@ export default function Home() {
               <p className="muted">No uploaded records found.</p>
             ) : (
               <div className="list">
-                {documents.map((document) => (
-                  <div className="list-item" key={document.id}>
+                {documents.map((doc) => (
+                  <div className="list-item" key={doc.id}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
-                      <strong>{document.original_filename}</strong>
-                      <span className="status">{document.category || "uncategorized"}</span>
+                      <strong>{doc.original_filename}</strong>
+                      <span className="status">{doc.category || "uncategorized"}</span>
                     </div>
-                    <p className="muted">{document.content_type} · {formatBytes(document.size_bytes)} · uploaded {formatDate(document.created_at)}</p>
-                    {document.description && <p>{document.description}</p>}
+                    <p className="muted">{doc.content_type} · {formatBytes(doc.size_bytes)} · uploaded {formatDate(doc.created_at)}</p>
+                    {doc.description && <p>{doc.description}</p>}
                   </div>
                 ))}
               </div>
