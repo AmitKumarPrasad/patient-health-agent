@@ -10,7 +10,7 @@ from app.auth.keycloak import get_current_user
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Availability, Notification, Patient, Provider
+from app.models import Appointment, Availability, Notification, Patient, Provider
 
 
 PATIENT_SUBJECT = "integration-patient-subject"
@@ -25,7 +25,14 @@ def _build_database() -> tuple[object, Session]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine)
+    tables = [
+        Patient.__table__,
+        Provider.__table__,
+        Availability.__table__,
+        Appointment.__table__,
+        Notification.__table__,
+    ]
+    Base.metadata.create_all(engine, tables=tables)
     db = Session(engine)
     db.add_all(
         [
