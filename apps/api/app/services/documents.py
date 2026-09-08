@@ -30,6 +30,18 @@ def _safe_filename(filename: str) -> str:
     return name[:255] or "document"
 
 
+def _validate_content_signature(content_type: str, content: bytes) -> None:
+    """Reject binary uploads whose bytes do not match their declared media type."""
+    signatures = {
+        "application/pdf": content.startswith(b"%PDF-"),
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "text/plain": True,
+    }
+    if content_type not in signatures or not signatures[content_type]:
+        raise ValueError("Document content does not match its declared type")
+
+
 def get_storage_client() -> Minio:
     endpoint = settings.minio_endpoint.replace("http://", "").replace("https://", "")
     return Minio(
@@ -69,6 +81,7 @@ def upload_document(
         raise ValueError("Document is empty")
     if len(content) > MAX_DOCUMENT_BYTES:
         raise ValueError("Document exceeds the 10 MB limit")
+    _validate_content_signature(content_type, content)
 
     sha256 = hashlib.sha256(content).hexdigest()
     client = get_storage_client()
