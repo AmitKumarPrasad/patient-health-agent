@@ -14,8 +14,9 @@ test("patient can sign in, find a provider, book, list, and cancel an appointmen
   await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Find a provider" })).toBeVisible();
 
+  const providers = page.locator("#providers");
   await page.getByPlaceholder("Specialty, e.g. cardiology").fill("General Medicine");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await providers.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("Demo Provider", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "View availability" }).click();
