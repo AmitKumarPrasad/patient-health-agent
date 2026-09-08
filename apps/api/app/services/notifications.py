@@ -26,6 +26,12 @@ REMINDER_OFFSETS = {
 }
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _reminder_text(
     appointment: Appointment,
     patient: Patient,
@@ -37,7 +43,7 @@ def _reminder_text(
         f"Hello {patient.first_name},\n\n"
         f"This is a reminder for your {provider.specialty} appointment with "
         f"Dr. {provider.first_name} {provider.last_name}.\n\n"
-        f"Date/time: {appointment.starts_at.astimezone(timezone.utc).isoformat()}\n"
+        f"Date/time: {_as_utc(appointment.starts_at).isoformat()}\n"
         f"Reminder: {reminder}\n"
         f"Status: {appointment.status}\n\n"
         "This is an automated message from the Patient Health Agent demo."
@@ -55,8 +61,9 @@ def schedule_appointment_reminders(db: Session, appointment: Appointment) -> int
 
     created = 0
     now = datetime.now(timezone.utc)
+    appointment_start = _as_utc(appointment.starts_at)
     for notification_type, offset in REMINDER_OFFSETS.items():
-        scheduled_for = appointment.starts_at - offset
+        scheduled_for = appointment_start - offset
         if scheduled_for <= now:
             continue
         exists = db.scalar(
@@ -122,7 +129,7 @@ def send_email(notification: Notification) -> None:
 def process_pending_notifications(
     db: Session, *, now: datetime | None = None, limit: int = 50
 ) -> int:
-    current_time = now or datetime.now(timezone.utc)
+    current_time = _as_utc(now or datetime.now(timezone.utc))
     notifications = db.scalars(
         select(Notification)
         .where(
