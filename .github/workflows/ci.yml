@@ -41,3 +41,10 @@ jobs:
           NEXT_PUBLIC_KEYCLOAK_REALM: patient-health
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: patient-health-web
         run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet
