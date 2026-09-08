@@ -1,7 +1,6 @@
 import asyncio
 
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
@@ -50,7 +49,7 @@ def test_hsts_is_added_for_production_https_requests(monkeypatch) -> None:
     assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
 
 
-def test_readiness_reports_ready_when_database_is_reachable(monkeypatch) -> None:
+def test_readiness_reports_ready_when_database_is_reachable() -> None:
     class FakeSession:
         def execute(self, statement):
             assert str(statement) == "SELECT 1"
@@ -65,7 +64,7 @@ def test_readiness_reports_ready_when_database_is_reachable(monkeypatch) -> None
     assert response.json() == {"status": "ready"}
 
 
-def test_readiness_reports_not_ready_when_database_is_unreachable(monkeypatch) -> None:
+def test_readiness_reports_not_ready_when_database_is_unreachable() -> None:
     class BrokenSession:
         def execute(self, statement):
             raise OperationalError(statement, {}, Exception("database unavailable"))
