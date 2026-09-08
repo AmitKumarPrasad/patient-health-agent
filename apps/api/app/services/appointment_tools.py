@@ -89,14 +89,19 @@ def book_appointment(
         raise ValueError("Provider not found")
 
     requested_date = starts_at.astimezone(timezone.utc).date()
+    appointment_start_utc = starts_at.astimezone(timezone.utc)
+    appointment_end_utc = ends_at.astimezone(timezone.utc)
+
     available = db.scalars(
-        select(Availability).where(
+        select(Availability)
+        .where(
             Availability.provider_id == provider_id,
             Availability.available_date == requested_date,
             Availability.is_available.is_(True),
-            Availability.start_time <= starts_at.astimezone(timezone.utc).time(),
-            Availability.end_time >= ends_at.astimezone(timezone.utc).time(),
+            Availability.start_time <= appointment_start_utc.time(),
+            Availability.end_time >= appointment_end_utc.time(),
         )
+        .with_for_update()
     ).first()
     if available is None:
         raise ValueError("The requested time is not in the provider's available schedule")
@@ -105,8 +110,8 @@ def book_appointment(
         select(Appointment).where(
             Appointment.provider_id == provider_id,
             Appointment.status.in_((AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED)),
-            Appointment.starts_at < ends_at,
-            Appointment.ends_at > starts_at,
+            Appointment.starts_at < appointment_end_utc,
+            Appointment.ends_at > appointment_start_utc,
         ).limit(1)
     )
     if overlap is not None:
