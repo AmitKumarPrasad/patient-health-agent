@@ -49,6 +49,20 @@ services:
       keycloak:
         condition: service_started
 
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:-http://localhost:8080}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-patient-health}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-patient-health-web}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - keycloak
+
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
