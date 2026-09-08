@@ -220,6 +220,41 @@ button:disabled {
   color: var(--danger);
 }
 
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.record-panel {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.record-panel h3,
+.record-list-header h3 {
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.record-list-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 22px 0 12px;
+}
+
+.record-list-header form {
+  flex: 1 1 420px;
+}
+
+.record-list-header form input {
+  min-width: 240px;
+}
+
 @media (max-width: 850px) {
   .card,
   .card.wide {
@@ -232,5 +267,17 @@ button:disabled {
 
   .nav a {
     display: none;
+  }
+
+  .records-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .record-list-header {
+    display: block;
+  }
+
+  .record-list-header form {
+    margin-top: 12px;
   }
 }
