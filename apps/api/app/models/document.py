@@ -18,6 +18,7 @@ class PatientDocument(Base):
     original_filename: Mapped[str] = mapped_column(String(255))
     content_type: Mapped[str] = mapped_column(String(150))
     size_bytes: Mapped[int] = mapped_column()
+    sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     category: Mapped[str | None] = mapped_column(String(100), index=True)
     description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
