@@ -27,31 +27,36 @@ test("patient can sign in, manage records, book, list, and cancel an appointment
 
   const records = page.locator("#records");
   const fileInput = records.locator("#record-file");
+  const retry = test.info().retry;
+  const recordFilename = `e2e-record-${retry}.txt`;
+  const recordCategory = `E2E test record ${retry}`;
   await fileInput.setInputFiles({
-    name: "e2e-record.txt",
+    name: recordFilename,
     mimeType: "text/plain",
     buffer: Buffer.from("Synthetic E2E patient record for lifecycle testing."),
   });
-  await records.getByPlaceholder("Category, e.g. lab report").fill("E2E test record");
+  await records.getByPlaceholder("Category, e.g. lab report").fill(recordCategory);
   await records.getByPlaceholder("Short description (optional)").fill("Synthetic upload used by Playwright.");
   await records.getByRole("button", { name: "Upload record" }).click();
-  await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
-  await expect(records.getByText("E2E test record", { exact: true })).toBeVisible();
+  await expect(records.getByText(recordFilename, { exact: true })).toBeVisible();
+  await expect(records.getByText(recordCategory, { exact: true })).toBeVisible();
 
-  const recordItem = records.locator(".list-item").filter({ hasText: "e2e-record.txt" });
+  let recordItem = records.locator(".list-item").filter({ hasText: recordFilename });
   await expect(recordItem.getByRole("button", { name: "Download" })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await recordItem.getByRole("button", { name: "Download" }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("e2e-record.txt");
+  expect(download.suggestedFilename()).toBe(recordFilename);
 
-  await records.getByPlaceholder("Search filename, category or description").fill("e2e-record.txt");
+  await records.getByPlaceholder("Search filename, category or description").fill(recordFilename);
   await records.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
+  await expect(records.getByText(recordFilename, { exact: true })).toBeVisible();
 
+  recordItem = records.locator(".list-item").filter({ hasText: recordFilename });
+  await expect(recordItem.getByRole("button", { name: "Delete" })).toBeVisible();
   page.once("dialog", (dialog) => void dialog.accept());
   await recordItem.getByRole("button", { name: "Delete" }).click();
-  await expect(records.getByText("e2e-record.txt", { exact: true })).not.toBeVisible();
+  await expect(records.getByText(recordFilename, { exact: true })).not.toBeVisible();
 
   const providers = page.locator("#providers");
   await page.getByPlaceholder("Specialty, e.g. cardiology").fill("General Medicine");
