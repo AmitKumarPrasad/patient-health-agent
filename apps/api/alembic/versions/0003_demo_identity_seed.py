@@ -91,7 +91,7 @@ def upgrade() -> None:
         }
         for slot_id, demo_date in zip(AVAILABILITY_IDS, demo_dates, strict=True)
     ]
-    op.execute(sa.insert(availability), rows)
+    op.bulk_insert(availability, rows)
 
 
 def downgrade() -> None:
