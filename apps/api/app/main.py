@@ -6,6 +6,7 @@ from starlette.responses import Response
 
 from app.api.agent import router as agent_router
 from app.api.appointments import router as appointments_router
+from app.api.audit import router as audit_router
 from app.api.clinical import router as clinical_router
 from app.api.consultations import router as consultations_router
 from app.api.documents import router as documents_router
@@ -44,6 +45,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(health_router)
 app.include_router(agent_router)
 app.include_router(appointments_router)
+app.include_router(audit_router)
 app.include_router(clinical_router)
 app.include_router(consultations_router)
 app.include_router(documents_router)
