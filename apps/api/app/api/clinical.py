@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.keycloak import get_current_user, patient_subject, require_roles
 from app.db.session import get_db
+from app.models.appointment import Appointment, AppointmentStatus
 from app.models.availability import Availability
 from app.models.patient import Patient
 from app.models.provider import Provider
@@ -51,6 +52,11 @@ class StatusRequest(BaseModel):
     status: str = Field(min_length=1, max_length=20)
 
 
+class AppointmentStatusResponse(BaseModel):
+    id: UUID
+    status: str
+
+
 def _roles(user: dict) -> set[str]:
     roles = set(user.get("realm_access", {}).get("roles", []))
     for client in user.get("resource_access", {}).values():
@@ -76,7 +82,7 @@ def providers(
     _: dict = Depends(get_current_user),
 ) -> list[ProviderResponse]:
     query = select(Provider).order_by(Provider.last_name, Provider.first_name)
-    if specialty:
+    if specialty and specialty.strip():
         query = query.where(Provider.specialty.ilike(f"%{specialty.strip()}%"))
     return [ProviderResponse.model_validate(item, from_attributes=True) for item in db.scalars(query).all()]
 
@@ -88,8 +94,7 @@ def provider_availability(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ) -> list[AvailabilityResponse]:
-    provider = db.get(Provider, provider_id)
-    if provider is None:
+    if db.get(Provider, provider_id) is None:
         raise HTTPException(status_code=404, detail="Provider not found")
     rows = db.scalars(
         select(Availability)
@@ -113,18 +118,15 @@ def provider_availability(
     ]
 
 
-@router.patch("/api/appointments/{appointment_id}/status")
+@router.patch("/api/appointments/{appointment_id}/status", response_model=AppointmentStatusResponse)
 def update_appointment_status(
     appointment_id: UUID,
     request: StatusRequest,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> AppointmentStatusResponse:
     roles = _roles(user)
-    if not roles.intersection({PATIENT_ROLE, PROVIDER_ROLE, ADMIN_ROLE}):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
-
-    appointment = db.get(__import__("app.models.appointment", fromlist=["Appointment"]).Appointment, appointment_id)
+    appointment = db.get(Appointment, appointment_id)
     if appointment is None:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
@@ -132,7 +134,11 @@ def update_appointment_status(
     authorized = ADMIN_ROLE in roles
     if PATIENT_ROLE in roles:
         patient = db.scalar(select(Patient).where(Patient.external_id == subject))
-        authorized = authorized or (patient is not None and appointment.patient_id == patient.id and request.status.lower() == "cancelled")
+        authorized = authorized or (
+            patient is not None
+            and appointment.patient_id == patient.id
+            and request.status.lower() == AppointmentStatus.CANCELLED
+        )
     if PROVIDER_ROLE in roles:
         provider = db.scalar(select(Provider).where(Provider.external_id == subject))
         authorized = authorized or (provider is not None and appointment.provider_id == provider.id)
@@ -140,6 +146,7 @@ def update_appointment_status(
         raise HTTPException(status_code=403, detail="You are not authorized to change this appointment")
 
     try:
-        return transition_status(db, appointment_id, request.status).__dict__
+        updated = transition_status(db, appointment_id, request.status)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AppointmentStatusResponse(id=updated.id, status=str(updated.status))
