@@ -4,8 +4,6 @@ Revision ID: 0001_initial_schema
 Revises:
 Create Date: 2026-09-08
 """
-from collections.abc import Sequence
-
 from alembic import op
 import sqlalchemy as sa
 
