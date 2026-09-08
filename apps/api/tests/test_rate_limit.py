@@ -1,13 +1,10 @@
+import asyncio
+
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 from app.config import settings
 from app.middleware.rate_limit import FixedWindowRateLimitMiddleware
-
-
-async def _ok_endpoint(scope, receive, send) -> None:
-    response = PlainTextResponse("ok")
-    await response(scope, receive, send)
 
 
 def _request(path: str, host: str = "127.0.0.1") -> Request:
@@ -26,18 +23,15 @@ def _request(path: str, host: str = "127.0.0.1") -> Request:
 
 
 def test_rate_limit_returns_429_after_threshold(monkeypatch) -> None:
-    import asyncio
-
     monkeypatch.setattr(settings, "rate_limit_requests", 1)
     monkeypatch.setattr(settings, "rate_limit_window_seconds", 60)
-    middleware = FixedWindowRateLimitMiddleware(_ok_endpoint)
+    middleware = FixedWindowRateLimitMiddleware(lambda request: None)
 
     async def run() -> list[int]:
         statuses: list[int] = []
 
         async def call_next(request):
-            response = await _ok_endpoint(request.scope, request.receive, request._send)
-            return response
+            return PlainTextResponse("ok")
 
         for _ in range(2):
             request = _request("/api/example")
@@ -49,10 +43,8 @@ def test_rate_limit_returns_429_after_threshold(monkeypatch) -> None:
 
 
 def test_health_check_is_exempt_from_rate_limit(monkeypatch) -> None:
-    import asyncio
-
     monkeypatch.setattr(settings, "rate_limit_requests", 1)
-    middleware = FixedWindowRateLimitMiddleware(_ok_endpoint)
+    middleware = FixedWindowRateLimitMiddleware(lambda request: None)
 
     async def run() -> list[int]:
         statuses: list[int] = []
