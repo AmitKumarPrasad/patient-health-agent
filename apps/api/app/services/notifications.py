@@ -3,10 +3,12 @@ from __future__ import annotations
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.notification import (
     Notification,
@@ -16,7 +18,6 @@ from app.models.notification import (
 )
 from app.models.patient import Patient
 from app.models.provider import Provider
-from app.config import settings
 
 
 REMINDER_OFFSETS = {
@@ -25,7 +26,12 @@ REMINDER_OFFSETS = {
 }
 
 
-def _reminder_text(appointment: Appointment, patient: Patient, provider: Provider, reminder: str) -> tuple[str, str]:
+def _reminder_text(
+    appointment: Appointment,
+    patient: Patient,
+    provider: Provider,
+    reminder: str,
+) -> tuple[str, str]:
     subject = f"Appointment reminder: {provider.first_name} {provider.last_name}"
     body = (
         f"Hello {patient.first_name},\n\n"
@@ -48,9 +54,10 @@ def schedule_appointment_reminders(db: Session, appointment: Appointment) -> int
         return 0
 
     created = 0
+    now = datetime.now(timezone.utc)
     for notification_type, offset in REMINDER_OFFSETS.items():
         scheduled_for = appointment.starts_at - offset
-        if scheduled_for <= datetime.now(timezone.utc):
+        if scheduled_for <= now:
             continue
         exists = db.scalar(
             select(Notification).where(
@@ -65,7 +72,9 @@ def schedule_appointment_reminders(db: Session, appointment: Appointment) -> int
             appointment,
             patient,
             provider,
-            "24 hours before" if notification_type == NotificationType.APPOINTMENT_REMINDER_24H else "1 hour before",
+            "24 hours before"
+            if notification_type == NotificationType.APPOINTMENT_REMINDER_24H
+            else "1 hour before",
         )
         db.add(
             Notification(
@@ -85,6 +94,19 @@ def schedule_appointment_reminders(db: Session, appointment: Appointment) -> int
     return created
 
 
+def cancel_pending_appointment_reminders(db: Session, appointment_id: UUID) -> int:
+    result = db.execute(
+        update(Notification)
+        .where(
+            Notification.appointment_id == appointment_id,
+            Notification.status == NotificationStatus.PENDING,
+        )
+        .values(status=NotificationStatus.FAILED, error_message="Appointment is no longer active")
+    )
+    db.commit()
+    return result.rowcount
+
+
 def send_email(notification: Notification) -> None:
     if not settings.smtp_host:
         raise RuntimeError("SMTP_HOST is not configured")
@@ -97,7 +119,9 @@ def send_email(notification: Notification) -> None:
         client.send_message(message)
 
 
-def process_pending_notifications(db: Session, *, now: datetime | None = None, limit: int = 50) -> int:
+def process_pending_notifications(
+    db: Session, *, now: datetime | None = None, limit: int = 50
+) -> int:
     current_time = now or datetime.now(timezone.utc)
     notifications = db.scalars(
         select(Notification)
@@ -112,10 +136,19 @@ def process_pending_notifications(db: Session, *, now: datetime | None = None, l
     processed = 0
     for notification in notifications:
         try:
-            send_email(notification)
-            notification.status = NotificationStatus.SENT
-            notification.sent_at = current_time
-            notification.error_message = None
+            appointment = db.get(Appointment, notification.appointment_id)
+            if appointment is None or appointment.status in (
+                AppointmentStatus.CANCELLED,
+                AppointmentStatus.COMPLETED,
+                AppointmentStatus.NO_SHOW,
+            ):
+                notification.status = NotificationStatus.FAILED
+                notification.error_message = "Appointment is no longer active"
+            else:
+                send_email(notification)
+                notification.status = NotificationStatus.SENT
+                notification.sent_at = current_time
+                notification.error_message = None
         except Exception as exc:  # noqa: BLE001 - persist delivery failure for operator visibility.
             notification.status = NotificationStatus.FAILED
             notification.error_message = str(exc)[:2000]
