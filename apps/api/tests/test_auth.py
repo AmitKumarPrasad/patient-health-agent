@@ -26,3 +26,27 @@ def test_invalid_token_returns_401() -> None:
     with pytest.raises(HTTPException) as exc_info:
         decode_access_token("not-a-jwt")
     assert exc_info.value.status_code == 401
+
+
+def test_configured_audience_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "app.auth.keycloak.jwt.get_unverified_header",
+        lambda token: {"kid": "demo-key"},
+    )
+    monkeypatch.setattr(
+        "app.auth.keycloak._get_jwks",
+        lambda: {"keys": [{"kid": "demo-key", "kty": "RSA"}]},
+    )
+    monkeypatch.setattr("app.auth.keycloak.settings.keycloak_audience", "patient-health-api")
+
+    def fake_decode(*args, **kwargs):
+        calls.update(kwargs)
+        return {"sub": "demo-sub"}
+
+    monkeypatch.setattr("app.auth.keycloak.jwt.decode", fake_decode)
+
+    assert decode_access_token("demo-token") == {"sub": "demo-sub"}
+    assert calls["audience"] == "patient-health-api"
+    assert "options" not in calls
