@@ -11,7 +11,6 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from typing_extensions import Annotated
 
-from app.auth.keycloak import patient_subject
 from app.db.session import SessionLocal
 from app.services.appointment_tools import book_appointment, get_available_slots, search_providers
 from app.services.llm import get_llm
@@ -35,38 +34,32 @@ inferred from the user. The booking tool does not accept a patient ID.
 """
 
 
-def _search_providers(specialty: str) -> list[dict[str, str]]:
-    with SessionLocal() as db:
-        return search_providers(db, specialty)
+def build_tools(authenticated_subject: str) -> list[StructuredTool]:
+    def _search_providers(specialty: str) -> list[dict[str, str]]:
+        with SessionLocal() as db:
+            return search_providers(db, specialty)
 
+    def _get_available_slots(provider_id: str, requested_date: date) -> list[dict[str, str]]:
+        with SessionLocal() as db:
+            return get_available_slots(db, UUID(provider_id), requested_date)
 
-def _get_available_slots(provider_id: str, requested_date: date) -> list[dict[str, str]]:
-    with SessionLocal() as db:
-        return get_available_slots(db, UUID(provider_id), requested_date)
+    def _book_authenticated_patient(
+        provider_id: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        reason: str | None = None,
+    ) -> dict[str, str]:
+        with SessionLocal() as db:
+            patient = require_patient_by_external_id(db, authenticated_subject)
+            return book_appointment(
+                db,
+                patient.id,
+                UUID(provider_id),
+                starts_at,
+                ends_at,
+                reason,
+            )
 
-
-def _book_authenticated_patient(
-    provider_id: str,
-    starts_at: datetime,
-    ends_at: datetime,
-    reason: str | None = None,
-) -> dict[str, str]:
-    with SessionLocal() as db:
-        patient = require_patient_by_external_id(db, _authenticated_subject)
-        return book_appointment(
-            db,
-            patient.id,
-            UUID(provider_id),
-            starts_at,
-            ends_at,
-            reason,
-        )
-
-
-_authenticated_subject = ""
-
-
-def build_tools() -> list[StructuredTool]:
     return [
         StructuredTool.from_function(
             _search_providers,
@@ -86,8 +79,8 @@ def build_tools() -> list[StructuredTool]:
     ]
 
 
-def build_appointment_graph():
-    tools = build_tools()
+def build_appointment_graph(authenticated_subject: str):
+    tools = build_tools(authenticated_subject)
     llm = get_llm().bind_tools(tools)
     tool_node = ToolNode(tools)
 
@@ -123,17 +116,12 @@ def build_appointment_graph():
 
 
 def invoke_appointment_agent(user_request: str, authenticated_subject: str) -> str:
-    global _authenticated_subject
-    _authenticated_subject = patient_subject({"sub": authenticated_subject})
-    try:
-        graph = build_appointment_graph()
-        result = graph.invoke(
-            {
-                "user_request": user_request,
-                "patient_subject": _authenticated_subject,
-                "messages": [HumanMessage(content=user_request)],
-            }
-        )
-        return result["response"]
-    finally:
-        _authenticated_subject = ""
+    graph = build_appointment_graph(authenticated_subject)
+    result = graph.invoke(
+        {
+            "user_request": user_request,
+            "patient_subject": authenticated_subject,
+            "messages": [HumanMessage(content=user_request)],
+        }
+    )
+    return result["response"]
