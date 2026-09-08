@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment
 from app.models.patient import Patient
+from app.models.provider import Provider
 
 
 PATIENT_ROLE = "patient"
@@ -14,34 +15,33 @@ PROVIDER_ROLE = "provider"
 ADMIN_ROLE = "admin"
 
 
-def list_accessible_appointments(
-    db: Session,
-    *,
-    subject: str,
-    roles: set[str],
-) -> list[Appointment]:
+def list_accessible_appointments(db: Session, *, subject: str, roles: set[str]) -> list[Appointment]:
     if ADMIN_ROLE in roles:
-        return db.scalars(
-            select(Appointment).order_by(Appointment.starts_at.desc())
-        ).all()
+        return db.scalars(select(Appointment).order_by(Appointment.starts_at.desc())).all()
 
-    patient = db.scalar(select(Patient).where(Patient.external_id == subject))
-    if PATIENT_ROLE in roles and patient is not None:
-        return db.scalars(
-            select(Appointment)
-            .where(Appointment.patient_id == patient.id)
-            .order_by(Appointment.starts_at.desc())
-        ).all()
+    if PATIENT_ROLE in roles:
+        patient = db.scalar(select(Patient).where(Patient.external_id == subject))
+        if patient is not None:
+            return db.scalars(
+                select(Appointment)
+                .where(Appointment.patient_id == patient.id)
+                .order_by(Appointment.starts_at.desc())
+            ).all()
+
+    if PROVIDER_ROLE in roles:
+        provider = db.scalar(select(Provider).where(Provider.external_id == subject))
+        if provider is not None:
+            return db.scalars(
+                select(Appointment)
+                .where(Appointment.provider_id == provider.id)
+                .order_by(Appointment.starts_at.desc())
+            ).all()
 
     raise PermissionError("No appointment access for authenticated user")
 
 
 def get_accessible_appointment(
-    db: Session,
-    *,
-    appointment_id: UUID,
-    subject: str,
-    roles: set[str],
+    db: Session, *, appointment_id: UUID, subject: str, roles: set[str]
 ) -> Appointment:
     appointment = db.get(Appointment, appointment_id)
     if appointment is None:
@@ -50,8 +50,14 @@ def get_accessible_appointment(
     if ADMIN_ROLE in roles:
         return appointment
 
-    patient = db.scalar(select(Patient).where(Patient.external_id == subject))
-    if PATIENT_ROLE in roles and patient is not None and appointment.patient_id == patient.id:
-        return appointment
+    if PATIENT_ROLE in roles:
+        patient = db.scalar(select(Patient).where(Patient.external_id == subject))
+        if patient is not None and appointment.patient_id == patient.id:
+            return appointment
+
+    if PROVIDER_ROLE in roles:
+        provider = db.scalar(select(Provider).where(Provider.external_id == subject))
+        if provider is not None and appointment.provider_id == provider.id:
+            return appointment
 
     raise PermissionError("You are not authorized to access this appointment")
