@@ -21,7 +21,8 @@ RUN pip install --no-cache-dir \
     "langchain-tavily>=0.2,<1.0" \
     "langchain-core>=1.0,<2.0" \
     "minio>=7.2,<8.0" \
-    "python-multipart>=0.0.20,<1.0"
+    "python-multipart>=0.0.20,<1.0" \
+    "pypdf>=5.0,<7.0"
 
 COPY app ./app
 COPY alembic ./alembic
