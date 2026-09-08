@@ -27,7 +27,7 @@ jobs:
         run: pytest -q
 
   repair-web-lockfile:
-    if: github.event_name == 'push' && github.sha == '11545eddda91f099c8af201fe218218dec766b4d'
+    if: github.event_name == 'push' && github.sha == '2b7cf4ab1796e61c2d94cd7f0da685968d6bd35f'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
