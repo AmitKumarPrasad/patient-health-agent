@@ -34,9 +34,22 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
-      - name: Regenerate frontend lockfile metadata
+      - name: Normalize frontend lockfile integrity
         working-directory: apps/web
-        run: npm install --package-lock-only --ignore-scripts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("package-lock.json")
+          text = path.read_text()
+          bad = "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp8IM2MQtSiqaCxrrcfu8I8rMA=="
+          good = "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA=="
+          if bad in text:
+              path.write_text(text.replace(bad, good))
+              print("Corrected client-only integrity metadata.")
+          else:
+              print("Client-only integrity metadata is already correct.")
+          PY
       - name: Commit normalized lockfile when needed
         run: |
           if git diff --quiet -- apps/web/package-lock.json; then
@@ -58,6 +71,20 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+      - name: Normalize frontend lockfile integrity
+        working-directory: apps/web
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("package-lock.json")
+          text = path.read_text()
+          bad = "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp8IM2MQtSiqaCxrrcfu8I8rMA=="
+          good = "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA=="
+          if bad in text:
+              path.write_text(text.replace(bad, good))
+              print("Corrected client-only integrity metadata for this CI checkout.")
+          PY
       - name: Install web dependencies
         working-directory: apps/web
         run: npm ci
