@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.agents.appointment_agent import build_appointment_graph
+from app.agents.appointment_agent import invoke_appointment_agent
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -17,7 +17,7 @@ class AgentResponse(BaseModel):
 @router.post("/chat", response_model=AgentResponse)
 def chat(request: AgentRequest) -> AgentResponse:
     try:
-        result = build_appointment_graph().invoke({"user_request": request.message})
-    except RuntimeError as exc:
+        response = invoke_appointment_agent(request.message)
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return AgentResponse(response=result["response"])
+    return AgentResponse(response=response)
