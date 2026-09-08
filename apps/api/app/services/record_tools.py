@@ -63,8 +63,10 @@ def get_patient_document_text(document_id: str, subject: str) -> str:
 def _metadata(item: PatientDocument) -> dict[str, str]:
     return {
         "id": str(item.id),
-        "filename": item.original_filename,
+        "original_filename": item.original_filename,
         "content_type": item.content_type,
+        "size_bytes": str(item.size_bytes),
+        "sha256": item.sha256 or "",
         "category": item.category or "",
         "description": item.description or "",
         "created_at": item.created_at.isoformat() if item.created_at else "",
