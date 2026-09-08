@@ -138,4 +138,30 @@ export const api = {
     }
     return response.json() as Promise<PatientDocument>;
   },
+  downloadDocument: async (id: string) => {
+    const keycloak = getKeycloak();
+    await keycloak.updateToken(30);
+    const response = await fetch(`${API_URL}/api/documents/${id}`, {
+      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const detail = body?.detail ?? `Request failed with status ${response.status}`;
+      throw new Error(typeof detail === "string" ? detail : "Download failed");
+    }
+    return response.blob();
+  },
+  deleteDocument: async (id: string) => {
+    const keycloak = getKeycloak();
+    await keycloak.updateToken(30);
+    const response = await fetch(`${API_URL}/api/documents/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const detail = body?.detail ?? `Request failed with status ${response.status}`;
+      throw new Error(typeof detail === "string" ? detail : "Delete failed");
+    }
+  },
 };
