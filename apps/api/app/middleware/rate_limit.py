@@ -11,6 +11,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 
 
+MAX_TRACKED_CLIENTS = 10_000
+
+
 class FixedWindowRateLimitMiddleware(BaseHTTPMiddleware):
     """Apply a small per-client fixed-window request limit at the API boundary."""
 
@@ -42,5 +45,16 @@ class FixedWindowRateLimitMiddleware(BaseHTTPMiddleware):
                 )
 
             self._windows[client_host] = (count + 1, window_started)
+            if len(self._windows) > MAX_TRACKED_CLIENTS:
+                cutoff = now - window_seconds
+                stale_clients = [
+                    client for client, (_, started) in self._windows.items() if started < cutoff
+                ]
+                for client in stale_clients:
+                    self._windows.pop(client, None)
+
+                if len(self._windows) > MAX_TRACKED_CLIENTS:
+                    oldest_client = min(self._windows, key=lambda client: self._windows[client][1])
+                    self._windows.pop(oldest_client, None)
 
         return await call_next(request)
