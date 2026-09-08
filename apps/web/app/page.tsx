@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { api, Appointment, Availability, Patient, Provider } from "../lib/api";
+import { api, Appointment, Availability, Patient, PatientDocument, Provider } from "../lib/api";
 import { useAuth } from "./providers";
 
 function formatDate(value: string) {
@@ -11,20 +11,36 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function Home() {
   const auth = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
+  const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [specialty, setSpecialty] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState("");
+  const [recordMessage, setRecordMessage] = useState("");
+  const [recordAnswer, setRecordAnswer] = useState("");
+  const [recordQuery, setRecordQuery] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recordLoading, setRecordLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [recordError, setRecordError] = useState("");
 
   useEffect(() => {
     if (!auth.ready || !auth.authenticated) return;
@@ -35,10 +51,16 @@ export default function Home() {
     setLoading(true);
     setError("");
     try {
-      const [me, upcoming] = await Promise.all([api.me(), api.appointments()]);
+      const [me, upcoming, providerList, patientDocuments] = await Promise.all([
+        api.me(),
+        api.appointments(),
+        api.providers(),
+        api.documents(),
+      ]);
       setPatient(me);
       setAppointments(upcoming);
-      setProviders(await api.providers());
+      setProviders(providerList);
+      setDocuments(patientDocuments);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load dashboard");
     } finally {
@@ -120,6 +142,53 @@ export default function Home() {
     }
   }
 
+  async function askRecordAssistant(event: FormEvent) {
+    event.preventDefault();
+    if (!recordMessage.trim()) return;
+    setRecordLoading(true);
+    setRecordError("");
+    try {
+      const result = await api.recordAssistant(recordMessage.trim());
+      setRecordAnswer(result.response);
+      setRecordMessage("");
+    } catch (err) {
+      setRecordError(err instanceof Error ? err.message : "Record assistant request failed");
+    } finally {
+      setRecordLoading(false);
+    }
+  }
+
+  async function searchRecords(event: FormEvent) {
+    event.preventDefault();
+    setRecordError("");
+    try {
+      const result = await api.searchRecords(recordQuery.trim());
+      setDocuments(result.documents);
+    } catch (err) {
+      setRecordError(err instanceof Error ? err.message : "Unable to search records");
+    }
+  }
+
+  async function uploadRecord(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedFile) return;
+    setUploading(true);
+    setRecordError("");
+    try {
+      const document = await api.uploadDocument(selectedFile, uploadCategory, uploadDescription);
+      setDocuments((items) => [document, ...items]);
+      setSelectedFile(null);
+      setUploadCategory("");
+      setUploadDescription("");
+      const fileInput = document.getElementById("record-file") as HTMLInputElement | null;
+      if (fileInput) fileInput.value = "";
+    } catch (err) {
+      setRecordError(err instanceof Error ? err.message : "Unable to upload record");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   if (!auth.ready) {
     return <main className="container"><p className="muted">Loading secure session…</p></main>;
   }
@@ -147,6 +216,7 @@ export default function Home() {
         <div className="brand">Patient Health Agent</div>
         <nav className="nav">
           <a href="#appointments">Appointments</a>
+          <a href="#records">Records</a>
           <a href="#providers">Providers</a>
           <a href="#assistant">AI Assistant</a>
           <button className="secondary" onClick={() => void auth.logout()}>Sign out</button>
@@ -157,7 +227,7 @@ export default function Home() {
         <section className="hero">
           <p className="eyebrow">Patient dashboard</p>
           <h1>Welcome{patient ? `, ${patient.first_name}` : ""}</h1>
-          <p className="subtitle">Manage appointments and use the assistant for scheduling workflows. The AI does not provide clinical diagnosis or treatment decisions.</p>
+          <p className="subtitle">Manage appointments and use your record assistant to find information in your own uploaded health documents. The AI does not provide clinical diagnosis or treatment decisions.</p>
         </section>
 
         {error && <div className="error" style={{ marginBottom: 18 }}>{error}</div>}
@@ -194,6 +264,64 @@ export default function Home() {
               <button disabled={loading}>{loading ? "Working…" : "Ask assistant"}</button>
             </form>
             {answer && <div className="chat-answer" style={{ marginTop: 12 }}>{answer}</div>}
+          </div>
+
+          <div className="card full" id="records">
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+              <div>
+                <h2 style={{ marginBottom: 4 }}>My health records</h2>
+                <p className="muted">Upload your own records and ask the record assistant to find relevant information.</p>
+              </div>
+            </div>
+            {recordError && <div className="error" style={{ marginBottom: 14 }}>{recordError}</div>}
+            <div className="records-grid">
+              <div className="record-panel">
+                <h3>Upload a record</h3>
+                <form className="chat" onSubmit={uploadRecord}>
+                  <input id="record-file" type="file" accept="application/pdf,image/jpeg,image/png,text/plain" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
+                  <input value={uploadCategory} onChange={(event) => setUploadCategory(event.target.value)} placeholder="Category, e.g. lab report" />
+                  <input value={uploadDescription} onChange={(event) => setUploadDescription(event.target.value)} placeholder="Short description (optional)" />
+                  <button disabled={!selectedFile || uploading}>{uploading ? "Uploading…" : "Upload record"}</button>
+                </form>
+              </div>
+
+              <div className="record-panel">
+                <h3>Record assistant</h3>
+                <form className="chat" onSubmit={askRecordAssistant}>
+                  <textarea value={recordMessage} onChange={(event) => setRecordMessage(event.target.value)} placeholder="e.g. Find my latest lab report." />
+                  <button disabled={recordLoading}>{recordLoading ? "Searching…" : "Ask about my records"}</button>
+                </form>
+                {recordAnswer && <div className="chat-answer" style={{ marginTop: 12 }}>{recordAnswer}</div>}
+              </div>
+            </div>
+
+            <div className="record-list-header">
+              <div>
+                <h3>Document library</h3>
+                <p className="muted">Only records belonging to your authenticated patient account are returned.</p>
+              </div>
+              <form className="row" onSubmit={searchRecords}>
+                <input value={recordQuery} onChange={(event) => setRecordQuery(event.target.value)} placeholder="Search filename, category or description" />
+                <button className="secondary" type="submit">Search</button>
+              </form>
+            </div>
+
+            {documents.length === 0 ? (
+              <p className="muted">No uploaded records found.</p>
+            ) : (
+              <div className="list">
+                {documents.map((document) => (
+                  <div className="list-item" key={document.id}>
+                    <div className="row" style={{ justifyContent: "space-between" }}>
+                      <strong>{document.original_filename}</strong>
+                      <span className="status">{document.category || "uncategorized"}</span>
+                    </div>
+                    <p className="muted">{document.content_type} · {formatBytes(document.size_bytes)} · uploaded {formatDate(document.created_at)}</p>
+                    {document.description && <p>{document.description}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card full" id="providers">
