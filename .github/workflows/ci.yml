@@ -50,7 +50,7 @@ jobs:
           git push
 
   web:
-    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, 'declare Playwright E2E dependency') && !contains(github.event.head_commit.message, 'normalize Playwright lockfile'))
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, 'declare Playwright E2E dependency') && !contains(github.event.head_commit.message, 'normalize Playwright lockfile') && !contains(github.event.head_commit.message, 'refresh Playwright dependency lockfile'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -77,7 +77,7 @@ jobs:
         run: docker compose config --quiet
 
   e2e:
-    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, 'declare Playwright E2E dependency') && !contains(github.event.head_commit.message, 'normalize Playwright lockfile'))
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, 'declare Playwright E2E dependency') && !contains(github.event.head_commit.message, 'normalize Playwright lockfile') && !contains(github.event.head_commit.message, 'refresh Playwright dependency lockfile'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
