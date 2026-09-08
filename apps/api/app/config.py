@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     keycloak_issuer_url: str = "http://localhost:8080/realms/patient-health"
     keycloak_jwks_url: str = "http://keycloak:8080/realms/patient-health/protocol/openid-connect/certs"
     keycloak_audience: str | None = None
+    keycloak_jwks_cache_ttl_seconds: int = 300
 
     smtp_host: str = "localhost"
     smtp_port: int = 1025
