@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_env: str = "development"
     app_name: str = "patient-health-agent"
+    cors_origins: str = "http://localhost:3000"
 
     postgres_host: str = "localhost"
     postgres_port: int = 5432
