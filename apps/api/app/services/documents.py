@@ -106,7 +106,15 @@ def upload_document(
         content_type=content_type,
     )
     db.add(document)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            client.remove_object(settings.minio_bucket, document.object_key)
+        except Exception:
+            pass
+        raise
     db.refresh(document)
 
     try:
