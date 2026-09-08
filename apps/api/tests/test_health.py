@@ -1,10 +1,13 @@
 import asyncio
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 from app.config import settings
+from app.db.session import get_db
 from app.main import SecurityHeadersMiddleware, app
 
 
@@ -45,3 +48,33 @@ def test_hsts_is_added_for_production_https_requests(monkeypatch) -> None:
     response = asyncio.run(middleware.dispatch(request, call_next))
 
     assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+
+
+def test_readiness_reports_ready_when_database_is_reachable(monkeypatch) -> None:
+    class FakeSession:
+        def execute(self, statement):
+            assert str(statement) == "SELECT 1"
+
+    app.dependency_overrides[get_db] = lambda: FakeSession()
+    try:
+        response = client.get("/ready")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readiness_reports_not_ready_when_database_is_unreachable(monkeypatch) -> None:
+    class BrokenSession:
+        def execute(self, statement):
+            raise OperationalError(statement, {}, Exception("database unavailable"))
+
+    app.dependency_overrides[get_db] = lambda: BrokenSession()
+    try:
+        response = client.get("/ready")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "database": "unreachable"}
