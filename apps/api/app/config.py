@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     rate_limit_requests: int = 120
     rate_limit_window_seconds: int = 60
+    rate_limit_trust_forwarded_for: bool = False
 
     smtp_host: str = "localhost"
     smtp_port: int = 1025
