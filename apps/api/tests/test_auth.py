@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 
-from app.auth.keycloak import decode_access_token, patient_subject, require_roles
+from app.auth.keycloak import _get_jwks, decode_access_token, patient_subject, require_roles
 
 
 def test_patient_subject_requires_sub() -> None:
@@ -70,3 +70,70 @@ def test_unknown_signing_key_forces_jwks_refresh(monkeypatch: pytest.MonkeyPatch
 
     assert decode_access_token("rotated-token") == {"sub": "demo-sub"}
     assert calls == [False, True]
+
+
+def test_jwks_cache_reuses_fresh_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.auth.keycloak as keycloak
+
+    calls = 0
+
+    def fake_get(url: str, timeout: float):
+        nonlocal calls
+        calls += 1
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                pass
+
+            def json(self) -> dict[str, object]:
+                return {"keys": [{"kid": "cached-key", "kty": "RSA"}]}
+
+        return FakeResponse()
+
+    monkeypatch.setattr("app.auth.keycloak.httpx.get", fake_get)
+    monkeypatch.setattr("app.auth.keycloak.monotonic", lambda: 100.0)
+    monkeypatch.setattr("app.auth.keycloak.settings.keycloak_jwks_cache_ttl_seconds", 300)
+    keycloak._jwks_cache = None
+    keycloak._jwks_cached_at = 0.0
+
+    first = _get_jwks()
+    second = _get_jwks()
+
+    assert first == second
+    assert calls == 1
+
+
+def test_jwks_cache_refreshes_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.auth.keycloak as keycloak
+
+    responses = [
+        {"keys": [{"kid": "first-key", "kty": "RSA"}]},
+        {"keys": [{"kid": "second-key", "kty": "RSA"}]},
+    ]
+    calls = 0
+
+    def fake_get(url: str, timeout: float):
+        nonlocal calls
+        payload = responses[calls]
+        calls += 1
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                pass
+
+            def json(self) -> dict[str, object]:
+                return payload
+
+        return FakeResponse()
+
+    now = {"value": 100.0}
+    monkeypatch.setattr("app.auth.keycloak.httpx.get", fake_get)
+    monkeypatch.setattr("app.auth.keycloak.monotonic", lambda: now["value"])
+    monkeypatch.setattr("app.auth.keycloak.settings.keycloak_jwks_cache_ttl_seconds", 300)
+    keycloak._jwks_cache = None
+    keycloak._jwks_cached_at = 0.0
+
+    assert _get_jwks()["keys"][0]["kid"] == "first-key"
+    now["value"] = 400.1
+    assert _get_jwks()["keys"][0]["kid"] == "second-key"
+    assert calls == 2
