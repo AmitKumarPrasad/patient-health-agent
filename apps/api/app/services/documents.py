@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from io import BytesIO
 from pathlib import Path
-from uuid import UUID
+from uuid import uuid4
 
 from minio import Minio
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.document import PatientDocument
 from app.models.patient import Patient
+from app.services.document_ingestion import index_document
 
 ALLOWED_CONTENT_TYPES = {
     "application/pdf",
@@ -74,7 +75,7 @@ def upload_document(
     safe_name = _safe_filename(filename)
     document = PatientDocument(
         patient_id=patient.id,
-        object_key=f"patients/{patient.id}/{UUID(int=__import__('uuid').uuid4().int)}/{safe_name}",
+        object_key=f"patients/{patient.id}/{uuid4()}/{safe_name}",
         original_filename=safe_name,
         content_type=content_type,
         size_bytes=len(content),
@@ -91,10 +92,15 @@ def upload_document(
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    try:
+        index_document(db, document, content)
+    except Exception:  # noqa: BLE001 - upload must remain available if AI indexing is unavailable.
+        db.rollback()
     return document
 
 
-def get_document(db: Session, patient: Patient, document_id: UUID) -> PatientDocument:
+def get_document(db: Session, patient: Patient, document_id: uuid4) -> PatientDocument:
     document = db.scalar(
         select(PatientDocument).where(
             PatientDocument.id == document_id,
@@ -106,7 +112,7 @@ def get_document(db: Session, patient: Patient, document_id: UUID) -> PatientDoc
     return document
 
 
-def download_document(db: Session, patient: Patient, document_id: UUID) -> tuple[PatientDocument, bytes]:
+def download_document(db: Session, patient: Patient, document_id) -> tuple[PatientDocument, bytes]:
     document = get_document(db, patient, document_id)
     client = get_storage_client()
     try:
@@ -120,7 +126,7 @@ def download_document(db: Session, patient: Patient, document_id: UUID) -> tuple
         raise RuntimeError("Unable to read document from object storage") from exc
 
 
-def delete_document(db: Session, patient: Patient, document_id: UUID) -> None:
+def delete_document(db: Session, patient: Patient, document_id) -> None:
     document = get_document(db, patient, document_id)
     client = get_storage_client()
     try:
