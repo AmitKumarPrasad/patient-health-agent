@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { getKeycloak } from "../lib/keycloak";
+import { getKeycloak } from "./keycloak";
 
 type AuthContextValue = {
   authenticated: boolean;
@@ -23,8 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onLoad: "check-sso",
         pkceMethod: "S256",
         checkLoginIframe: false,
+        silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
       })
-      .then((isAuthenticated) => {
+      .then((isAuthenticated: boolean) => {
         setAuthenticated(isAuthenticated);
         setReady(true);
       })
