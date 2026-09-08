@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from io import BytesIO
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from minio import Minio
 from sqlalchemy import select
@@ -95,12 +95,12 @@ def upload_document(
 
     try:
         index_document(db, document, content)
-    except Exception:  # noqa: BLE001 - upload must remain available if AI indexing is unavailable.
+    except Exception:  # noqa: BLE001 - upload remains available if AI indexing is unavailable.
         db.rollback()
     return document
 
 
-def get_document(db: Session, patient: Patient, document_id: uuid4) -> PatientDocument:
+def get_document(db: Session, patient: Patient, document_id: UUID) -> PatientDocument:
     document = db.scalar(
         select(PatientDocument).where(
             PatientDocument.id == document_id,
@@ -112,7 +112,7 @@ def get_document(db: Session, patient: Patient, document_id: uuid4) -> PatientDo
     return document
 
 
-def download_document(db: Session, patient: Patient, document_id) -> tuple[PatientDocument, bytes]:
+def download_document(db: Session, patient: Patient, document_id: UUID) -> tuple[PatientDocument, bytes]:
     document = get_document(db, patient, document_id)
     client = get_storage_client()
     try:
@@ -126,7 +126,7 @@ def download_document(db: Session, patient: Patient, document_id) -> tuple[Patie
         raise RuntimeError("Unable to read document from object storage") from exc
 
 
-def delete_document(db: Session, patient: Patient, document_id) -> None:
+def delete_document(db: Session, patient: Patient, document_id: UUID) -> None:
     document = get_document(db, patient, document_id)
     client = get_storage_client()
     try:
