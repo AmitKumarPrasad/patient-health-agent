@@ -121,6 +121,63 @@ def test_upload_document_rejects_mismatched_binary_content(
     monkeypatch.setattr("app.services.documents.get_storage_client", lambda: None)
 
 
+def test_upload_document_cleans_up_object_when_db_commit_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[Patient.__table__, PatientDocument.__table__])
+
+    class FakeMinio:
+        def __init__(self) -> None:
+            self.put_keys: list[str] = []
+            self.removed_keys: list[str] = []
+
+        def bucket_exists(self, bucket: str) -> bool:
+            return True
+
+        def put_object(self, bucket: str, key: str, stream: BytesIO, *, length: int, content_type: str) -> None:
+            self.put_keys.append(key)
+            assert stream.read() == b"hello"
+            assert length == 5
+            assert content_type == "text/plain"
+
+        def remove_object(self, bucket: str, key: str) -> None:
+            self.removed_keys.append(key)
+
+    storage = FakeMinio()
+    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: storage)
+    monkeypatch.setattr("app.services.documents.index_document", lambda *args: None)
+
+    with Session(engine) as db:
+        patient = Patient(first_name="Test", last_name="Patient")
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+        def fail_commit() -> None:
+            raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(db, "commit", fail_commit)
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            upload_document(
+                db,
+                patient,
+                filename="note.txt",
+                content_type="text/plain",
+                content=b"hello",
+                category=None,
+                description=None,
+            )
+
+    assert len(storage.put_keys) == 1
+    assert storage.removed_keys == storage.put_keys
+
+
 def test_download_document_rejects_tampered_content(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
