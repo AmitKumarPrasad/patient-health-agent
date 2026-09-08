@@ -20,7 +20,7 @@ def database_health(db: Session = Depends(get_db)) -> dict[str, str]:
     return {"status": "ok", "database": "reachable"}
 
 
-@router.get("/ready")
+@router.get("/ready", response_model=None)
 def readiness(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
     try:
         db.execute(text("SELECT 1"))
