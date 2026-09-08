@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     keycloak_jwks_url: str = "http://keycloak:8080/realms/patient-health/protocol/openid-connect/certs"
     keycloak_audience: str | None = None
 
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "no-reply@patient-health.local"
+
     @property
     def database_url(self) -> str:
         return (
