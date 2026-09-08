@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getKeycloak } from "./keycloak";
 
+// Auth provider uses a local Keycloak module so CI and local builds resolve the same path.
 type AuthContextValue = {
   authenticated: boolean;
   ready: boolean;
