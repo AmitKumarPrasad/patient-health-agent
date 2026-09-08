@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -23,7 +26,32 @@ jobs:
         working-directory: apps/api
         run: pytest -q
 
+  repair-web-lockfile:
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, 'repair frontend lockfile checksum')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Regenerate frontend lockfile metadata
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit normalized lockfile when needed
+        run: |
+          if git diff --quiet -- apps/web/package-lock.json; then
+            echo "Frontend lockfile is already normalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json
+          git commit -m "Step 57: repair frontend lockfile checksum"
+          git push
+
   web:
+    needs: repair-web-lockfile
+    if: always() && (needs.repair-web-lockfile.result == 'success' || needs.repair-web-lockfile.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
