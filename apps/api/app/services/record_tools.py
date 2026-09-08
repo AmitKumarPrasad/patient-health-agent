@@ -3,11 +3,11 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.session import SessionLocal
 from app.models.document import PatientDocument
 from app.models.patient import Patient
 from app.services.documents import download_document
+from app.services.rag import retrieve_patient_chunks
 
 
 def _patient_for_subject(db: Session, subject: str) -> Patient:
@@ -43,6 +43,12 @@ def search_patient_documents(request: str, subject: str, *, limit: int = 10) -> 
         return matched
 
 
+def search_patient_record_content(request: str, subject: str, *, limit: int = 5) -> list[dict]:
+    with SessionLocal() as db:
+        patient = _patient_for_subject(db, subject)
+        return retrieve_patient_chunks(db, patient, request.strip(), limit=limit)
+
+
 def get_patient_document_text(document_id: str, subject: str) -> str:
     from uuid import UUID
 
@@ -50,7 +56,7 @@ def get_patient_document_text(document_id: str, subject: str) -> str:
         patient = _patient_for_subject(db, subject)
         document, content = download_document(db, patient, UUID(document_id))
         if document.content_type != "text/plain":
-            return "Only text/plain documents can be read as text by the demo navigation agent."
+            return "Only text/plain documents can be read directly by the demo agent. Use semantic record search for indexed PDF content."
         return content[:50000].decode("utf-8", errors="replace")
 
 
