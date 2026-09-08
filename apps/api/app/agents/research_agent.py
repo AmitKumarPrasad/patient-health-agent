@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.graph import END, START, StateGraph
-from typing_extensions import TypedDict
 
 from app.services.llm import get_llm
 from app.services.web_search import get_web_search
 
 
-class ResearchState(TypedDict, total=False):
-    request: str
-    context: str
-    response: str
+class ResearchState(dict):
+    pass
 
 
 SYSTEM_PROMPT = """You are a general healthcare-information research assistant.
@@ -31,7 +27,12 @@ def invoke_research_agent(request: str) -> str:
     result = llm.invoke(
         [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=f"Public research request: {request}\n\nSearch results:\n{context}"),
+            HumanMessage(
+                content=(
+                    f"Public research request: {request}\n\n"
+                    f"Search results:\n{context}"
+                )
+            ),
         ]
     )
     return str(result.content)
