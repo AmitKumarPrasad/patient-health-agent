@@ -67,7 +67,7 @@ jobs:
         working-directory: apps/web
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
-          NEXT_PUBLIC_KEYCLOAK_URL: http://127.0.0.1:8080
+          NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
           NEXT_PUBLIC_KEYCLOAK_REALM: patient-health
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: patient-health-web
         run: npm run build
@@ -75,7 +75,7 @@ jobs:
         working-directory: apps/web
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
-          NEXT_PUBLIC_KEYCLOAK_URL: http://127.0.0.1:8080
+          NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
           NEXT_PUBLIC_KEYCLOAK_REALM: patient-health
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: patient-health-web
         run: |
