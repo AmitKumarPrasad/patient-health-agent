@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth.keycloak import get_current_user, patient_subject, require_roles
-from app.services.record_tools import get_patient_document_text, search_patient_documents
-from app.services.appointment_access import PATIENT_ROLE
 from app.agents.record_agent import invoke_record_agent
+from app.auth.keycloak import patient_subject, require_roles
+from app.services.appointment_access import PATIENT_ROLE
+from app.services.record_tools import get_patient_document_text, search_patient_documents
 
 router = APIRouter(prefix="/api/records", tags=["records"])
 
