@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -16,7 +21,10 @@ from app.api.records import router as records_router
 from app.api.research import router as research_router
 from app.config import settings
 from app.middleware.rate_limit import FixedWindowRateLimitMiddleware
-from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
+
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.app_name,
@@ -31,6 +39,17 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.exception("Unhandled API exception request_id=%s", request_id)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={REQUEST_ID_HEADER: request_id},
+    )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
