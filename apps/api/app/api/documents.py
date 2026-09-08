@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -12,7 +13,13 @@ from app.auth.keycloak import patient_subject, require_roles
 from app.db.session import get_db
 from app.models.document import PatientDocument
 from app.models.patient import Patient
-from app.services.documents import download_document, delete_document, list_documents, upload_document
+from app.services.documents import (
+    MAX_DOCUMENT_BYTES,
+    delete_document,
+    download_document,
+    list_documents,
+    upload_document,
+)
 
 PATIENT_ROLE = "patient"
 
@@ -67,7 +74,22 @@ def upload_patient_document(
 ) -> DocumentResponse:
     patient = _patient_for_subject(db, patient_subject(user))
     content_type = file.content_type or "application/octet-stream"
-    content = file.file.read()
+
+    if file.size is not None and file.size > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=400, detail="Document exceeds the 10 MB limit")
+
+    buffer = BytesIO()
+    total_size = 0
+    while True:
+        chunk = file.file.read(1024 * 1024)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > MAX_DOCUMENT_BYTES:
+            raise HTTPException(status_code=400, detail="Document exceeds the 10 MB limit")
+        buffer.write(chunk)
+    content = buffer.getvalue()
+
     try:
         document = upload_document(
             db,
@@ -82,6 +104,8 @@ def upload_patient_document(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    finally:
+        buffer.close()
     return _serialize(document)
 
 
