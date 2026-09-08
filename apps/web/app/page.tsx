@@ -53,6 +53,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [recordLoading, setRecordLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [documentAction, setDocumentAction] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [recordError, setRecordError] = useState("");
 
@@ -209,6 +210,38 @@ export default function Home() {
     }
   }
 
+  async function downloadRecord(document: PatientDocument) {
+    setDocumentAction(document.id);
+    setRecordError("");
+    try {
+      const blob = await api.downloadDocument(document.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = document.original_filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setRecordError(err instanceof Error ? err.message : "Unable to download record");
+    } finally {
+      setDocumentAction(null);
+    }
+  }
+
+  async function deleteRecord(document: PatientDocument) {
+    if (!window.confirm(`Delete ${document.original_filename}?`)) return;
+    setDocumentAction(document.id);
+    setRecordError("");
+    try {
+      await api.deleteDocument(document.id);
+      setDocuments((items) => items.filter((item) => item.id !== document.id));
+    } catch (err) {
+      setRecordError(err instanceof Error ? err.message : "Unable to delete record");
+    } finally {
+      setDocumentAction(null);
+    }
+  }
+
   if (!auth.ready) {
     return <main className="container"><p className="muted">Loading secure session…</p></main>;
   }
@@ -332,9 +365,19 @@ export default function Home() {
               <div className="list">
                 {documents.map((doc) => (
                   <div className="list-item" key={doc.id}>
-                    <div className="row" style={{ justifyContent: "space-between" }}>
-                      <strong>{doc.original_filename}</strong>
-                      <span className="status">{doc.category || "uncategorized"}</span>
+                    <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                      <div>
+                        <strong>{doc.original_filename}</strong>
+                        <span className="status" style={{ marginLeft: 8 }}>{doc.category || "uncategorized"}</span>
+                      </div>
+                      <div className="row">
+                        <button className="secondary" disabled={documentAction === doc.id} onClick={() => void downloadRecord(doc)}>
+                          {documentAction === doc.id ? "Working…" : "Download"}
+                        </button>
+                        <button className="danger" disabled={documentAction === doc.id} onClick={() => void deleteRecord(doc)}>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <p className="muted">{doc.content_type} · {formatBytes(doc.size_bytes)} · uploaded {formatDate(doc.created_at)}</p>
                     {doc.description && <p>{doc.description}</p>}
