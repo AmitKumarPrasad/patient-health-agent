@@ -1,14 +1,25 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
-test("patient can sign in, find a provider, book, list, and cancel an appointment", async ({ page }) => {
+function demoPatientCredentials() {
+  const realm = JSON.parse(
+    readFileSync("../../infrastructure/keycloak/patient-health-realm.json", "utf8"),
+  );
+  const user = realm.users.find((item: { username: string }) => item.username === "demo.patient");
+  if (!user?.credentials?.[0]?.value) throw new Error("Demo patient credentials not found");
+  return { username: user.username, password: user.credentials[0].value };
+}
+
+test("patient can sign in, manage records, book, list, and cancel an appointment", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Secure healthcare appointment management" })).toBeVisible();
 
   await page.getByRole("button", { name: "Continue to login" }).click();
   await page.waitForURL(/\/realms\/patient-health\/protocol\/openid-connect\/auth/);
 
-  await page.locator("#username").fill("demo.patient");
-  await page.locator("#password").fill("ChangeMe!Patient123");
+  const credentials = demoPatientCredentials();
+  await page.locator("#username").fill(credentials.username);
+  await page.locator("#password").fill(credentials.password);
   await page.locator("#kc-login").click();
 
   await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
@@ -19,7 +30,7 @@ test("patient can sign in, find a provider, book, list, and cancel an appointmen
   await fileInput.setInputFiles({
     name: "e2e-record.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("Synthetic E2E patient record for upload testing."),
+    buffer: Buffer.from("Synthetic E2E patient record for lifecycle testing."),
   });
   await records.getByPlaceholder("Category, e.g. lab report").fill("E2E test record");
   await records.getByPlaceholder("Short description (optional)").fill("Synthetic upload used by Playwright.");
@@ -27,9 +38,20 @@ test("patient can sign in, find a provider, book, list, and cancel an appointmen
   await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
   await expect(records.getByText("E2E test record", { exact: true })).toBeVisible();
 
+  const recordItem = records.locator(".list-item").filter({ hasText: "e2e-record.txt" });
+  await expect(recordItem.getByRole("button", { name: "Download" })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await recordItem.getByRole("button", { name: "Download" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("e2e-record.txt");
+
   await records.getByPlaceholder("Search filename, category or description").fill("e2e-record.txt");
   await records.getByRole("button", { name: "Search", exact: true }).click();
   await expect(records.getByText("e2e-record.txt", { exact: true })).toBeVisible();
+
+  page.once("dialog", (dialog) => void dialog.accept());
+  await recordItem.getByRole("button", { name: "Delete" }).click();
+  await expect(records.getByText("e2e-record.txt", { exact: true })).not.toBeVisible();
 
   const providers = page.locator("#providers");
   await page.getByPlaceholder("Specialty, e.g. cardiology").fill("General Medicine");
