@@ -13,9 +13,13 @@ from app.models.provider import Provider
 
 
 def search_providers(db: Session, specialty: str) -> list[dict[str, str]]:
+    specialty = specialty.strip()
+    if not specialty:
+        raise ValueError("Specialty is required")
+
     providers = db.scalars(
         select(Provider)
-        .where(Provider.specialty.ilike(f"%{specialty.strip()}%"))
+        .where(Provider.specialty.ilike(f"%{specialty}%"))
         .order_by(Provider.last_name, Provider.first_name)
     ).all()
     return [
@@ -83,6 +87,19 @@ def book_appointment(
         raise ValueError("Patient not found")
     if provider is None:
         raise ValueError("Provider not found")
+
+    requested_date = starts_at.astimezone(timezone.utc).date()
+    available = db.scalars(
+        select(Availability).where(
+            Availability.provider_id == provider_id,
+            Availability.available_date == requested_date,
+            Availability.is_available.is_(True),
+            Availability.start_time <= starts_at.astimezone(timezone.utc).time(),
+            Availability.end_time >= ends_at.astimezone(timezone.utc).time(),
+        )
+    ).first()
+    if available is None:
+        raise ValueError("The requested time is not in the provider's available schedule")
 
     overlap = db.scalar(
         select(Appointment).where(
