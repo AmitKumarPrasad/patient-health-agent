@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     postgres_user: str = "patient_health"
     postgres_password: str = "patient_health"
 
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5.6-luna"
+    tavily_api_key: str | None = None
+
     @property
     def database_url(self) -> str:
         return (
