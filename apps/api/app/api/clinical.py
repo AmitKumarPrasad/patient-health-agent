@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +17,10 @@ from app.models.provider import Provider
 from app.services.appointment_access import ADMIN_ROLE, PROVIDER_ROLE, PATIENT_ROLE
 from app.services.appointment_lifecycle import transition_status
 from app.services.appointment_tools import book_appointment
+from app.services.notifications import (
+    cancel_pending_appointment_reminders,
+    schedule_appointment_reminders,
+)
 
 router = APIRouter(tags=["clinical"])
 
@@ -86,6 +90,10 @@ class AppointmentCreateResponse(BaseModel):
     ends_at: str
     status: str
     reason: str | None
+
+
+class NotificationProcessResponse(BaseModel):
+    processed: int
 
 
 def _roles(user: dict) -> set[str]:
@@ -171,8 +179,6 @@ def create_appointment(
     user: dict = Depends(require_roles(PATIENT_ROLE)),
     db: Session = Depends(get_db),
 ) -> AppointmentCreateResponse:
-    from datetime import datetime
-
     try:
         starts_at = datetime.fromisoformat(request.starts_at)
         ends_at = datetime.fromisoformat(request.ends_at)
@@ -194,6 +200,10 @@ def create_appointment(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    appointment = db.get(Appointment, UUID(result["id"]))
+    if appointment is not None:
+        schedule_appointment_reminders(db, appointment)
 
     return AppointmentCreateResponse(
         id=UUID(result["id"]),
@@ -287,4 +297,24 @@ def update_appointment_status(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if str(updated.status) in {
+        AppointmentStatus.CANCELLED,
+        AppointmentStatus.COMPLETED,
+        AppointmentStatus.NO_SHOW,
+    }:
+        cancel_pending_appointment_reminders(db, appointment_id)
+    elif str(updated.status) == AppointmentStatus.CONFIRMED:
+        schedule_appointment_reminders(db, updated)
+
     return AppointmentStatusResponse(id=updated.id, status=str(updated.status))
+
+
+@router.post("/api/admin/notifications/process", response_model=NotificationProcessResponse)
+def process_notifications(
+    user: dict = Depends(require_roles(ADMIN_ROLE)),
+    db: Session = Depends(get_db),
+) -> NotificationProcessResponse:
+    from app.services.notifications import process_pending_notifications
+
+    return NotificationProcessResponse(processed=process_pending_notifications(db))
