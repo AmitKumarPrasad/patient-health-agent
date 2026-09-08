@@ -20,11 +20,11 @@ def chat(
     request: AgentRequest,
     user: dict = Depends(get_current_user),
 ) -> AgentResponse:
+    subject = patient_subject(user)
     try:
-        # Resolve the authenticated subject now; later appointment tools will use this
-        # server-side identity instead of accepting a patient_id from the model.
-        patient_subject(user)
-        response = invoke_appointment_agent(request.message)
+        response = invoke_appointment_agent(request.message, subject)
+    except LookupError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return AgentResponse(response=response)
