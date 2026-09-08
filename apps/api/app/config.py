@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-luna"
+    openai_embedding_model: str = "text-embedding-3-small"
     tavily_api_key: str | None = None
 
     keycloak_issuer_url: str = "http://localhost:8080/realms/patient-health"
