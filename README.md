@@ -65,3 +65,7 @@ Open `http://localhost:3000` for the web application and `http://localhost:8000/
 ## Important safety boundary
 
 This repository is for development/demo purposes. Do not use real patient or clinical data in the demo environment. Clinical decision-making is outside the scope of the AI assistant; the agent is intended to assist with workflows such as finding availability, scheduling, reminders and record navigation.
+
+## Dependency reproducibility
+
+The frontend dependencies are pinned by `apps/web/package-lock.json`, and CI installs them with `npm ci`.
