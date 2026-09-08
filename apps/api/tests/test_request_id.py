@@ -25,3 +25,12 @@ def test_request_id_is_generated_per_request() -> None:
     assert first != second
     UUID(first)
     UUID(second)
+
+
+def test_request_id_header_is_returned_on_error_response() -> None:
+    response = client.get("/route-that-does-not-exist")
+
+    request_id = response.headers.get(REQUEST_ID_HEADER)
+    assert response.status_code == 404
+    assert request_id is not None
+    UUID(request_id)
