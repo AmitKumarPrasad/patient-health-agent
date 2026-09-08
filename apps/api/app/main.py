@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api.agent import router as agent_router
 from app.api.appointments import router as appointments_router
 from app.api.clinical import router as clinical_router
+from app.api.consultations import router as consultations_router
 from app.api.health import router as health_router
 from app.config import settings
 
@@ -16,3 +17,4 @@ app.include_router(health_router)
 app.include_router(agent_router)
 app.include_router(appointments_router)
 app.include_router(clinical_router)
+app.include_router(consultations_router)
