@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from: str = "no-reply@patient-health.local"
 
+    jitsi_base_url: str = "http://localhost:8443"
+
     @property
     def database_url(self) -> str:
         return (
