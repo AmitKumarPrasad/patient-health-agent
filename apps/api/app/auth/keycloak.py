@@ -56,14 +56,22 @@ def decode_access_token(token: str) -> dict[str, Any]:
         if key is None:
             raise JWTError("Signing key not found")
 
-        options = {"verify_aud": settings.keycloak_audience is not None}
+        if settings.keycloak_audience is None:
+            options = {"verify_aud": False}
+            return jwt.decode(
+                token,
+                key,
+                algorithms=["RS256"],
+                issuer=settings.keycloak_issuer_url,
+                options=options,
+            )
+
         return jwt.decode(
             token,
             key,
             algorithms=["RS256"],
             issuer=settings.keycloak_issuer_url,
             audience=settings.keycloak_audience,
-            options=options,
         )
     except (JWTError, ValueError, TypeError) as exc:
         raise HTTPException(
