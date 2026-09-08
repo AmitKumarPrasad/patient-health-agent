@@ -11,6 +11,15 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatTime(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(1970, 0, 1, hours, minutes));
+}
+
 function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
@@ -370,9 +379,9 @@ export default function Home() {
                 <div className="row">
                   {availability.map((slot) => (
                     <button key={slot.id} onClick={() => void book(slot)}>
-                      {new Date(slot.start_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      {formatTime(slot.start_time)}
                       {" – "}
-                      {new Date(slot.end_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      {formatTime(slot.end_time)}
                     </button>
                   ))}
                 </div>
