@@ -19,7 +19,9 @@ RUN pip install --no-cache-dir \
     "langgraph>=1.2,<2.0" \
     "langchain-openai>=1.0,<2.0" \
     "langchain-tavily>=0.2,<1.0" \
-    "langchain-core>=1.0,<2.0"
+    "langchain-core>=1.0,<2.0" \
+    "minio>=7.2,<8.0" \
+    "python-multipart>=0.0.20,<1.0"
 
 COPY app ./app
 COPY alembic ./alembic
