@@ -4,24 +4,23 @@ from datetime import date, datetime
 from typing import TypedDict
 from uuid import UUID
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from typing_extensions import Annotated
 
-from app.services.appointment_tools import (
-    book_appointment,
-    get_available_slots,
-    search_providers,
-)
-from app.services.llm import get_llm
+from app.auth.keycloak import patient_subject
 from app.db.session import SessionLocal
+from app.services.appointment_tools import book_appointment, get_available_slots, search_providers
+from app.services.llm import get_llm
+from app.services.patient_identity import require_patient_by_external_id
 
 
 class AppointmentAgentState(TypedDict, total=False):
     user_request: str
+    patient_subject: str
     response: str
     messages: Annotated[list, add_messages]
 
@@ -31,6 +30,8 @@ Help users find and schedule appointments, but do not diagnose, prescribe, or ma
 Never claim an appointment is booked unless the booking tool has actually succeeded.
 Use the provider and availability tools for scheduling facts. Ask concise clarification questions when
 required information is missing. Appointment times must include an explicit timezone.
+The authenticated patient identity is supplied by the application and must never be requested from or
+inferred from the user. The booking tool does not accept a patient ID.
 """
 
 
@@ -44,22 +45,25 @@ def _get_available_slots(provider_id: str, requested_date: date) -> list[dict[st
         return get_available_slots(db, UUID(provider_id), requested_date)
 
 
-def _book_appointment(
-    patient_id: str,
+def _book_authenticated_patient(
     provider_id: str,
     starts_at: datetime,
     ends_at: datetime,
     reason: str | None = None,
 ) -> dict[str, str]:
     with SessionLocal() as db:
+        patient = require_patient_by_external_id(db, _authenticated_subject)
         return book_appointment(
             db,
-            UUID(patient_id),
+            patient.id,
             UUID(provider_id),
             starts_at,
             ends_at,
             reason,
         )
+
+
+_authenticated_subject = ""
 
 
 def build_tools() -> list[StructuredTool]:
@@ -75,9 +79,9 @@ def build_tools() -> list[StructuredTool]:
             description="Return currently available appointment slots for a provider on a date.",
         ),
         StructuredTool.from_function(
-            _book_appointment,
+            _book_authenticated_patient,
             name="book_appointment",
-            description="Book an appointment only after a valid patient, provider, and available slot are known.",
+            description="Book an appointment for the authenticated patient after a valid provider and available slot are known. Never supply or request a patient ID.",
         ),
     ]
 
@@ -118,7 +122,18 @@ def build_appointment_graph():
     return graph.compile()
 
 
-def invoke_appointment_agent(user_request: str) -> str:
-    graph = build_appointment_graph()
-    result = graph.invoke({"user_request": user_request, "messages": [HumanMessage(content=user_request)]})
-    return result["response"]
+def invoke_appointment_agent(user_request: str, authenticated_subject: str) -> str:
+    global _authenticated_subject
+    _authenticated_subject = patient_subject({"sub": authenticated_subject})
+    try:
+        graph = build_appointment_graph()
+        result = graph.invoke(
+            {
+                "user_request": user_request,
+                "patient_subject": _authenticated_subject,
+                "messages": [HumanMessage(content=user_request)],
+            }
+        )
+        return result["response"]
+    finally:
+        _authenticated_subject = ""
