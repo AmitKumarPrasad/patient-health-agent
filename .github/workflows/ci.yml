@@ -27,7 +27,7 @@ jobs:
         run: pytest -q
 
   repair-web-lockfile:
-    if: github.event_name == 'push' && !contains(github.event.head_commit.message, 'repair frontend lockfile checksum')
+    if: github.event_name == 'push' && github.sha == '44d20432c185770c26baebfef51656735811a77e'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -46,7 +46,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/package-lock.json
-          git commit -m "Step 57: repair frontend lockfile checksum"
+          git commit -m "Step 57: normalize frontend lockfile"
           git push
 
   web:
