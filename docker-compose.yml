@@ -16,13 +16,15 @@ services:
       retries: 10
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4
-    command: start-dev --http-port=8080
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: start-dev --http-port=8080 --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
     ports:
       - "8080:8080"
+    volumes:
+      - ./infrastructure/keycloak:/opt/keycloak/data/import:ro
 
   api:
     build:
@@ -53,7 +55,7 @@ services:
     build:
       context: ./apps/web
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
       NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:-http://localhost:8080}
       NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-patient-health}
       NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-patient-health-web}
