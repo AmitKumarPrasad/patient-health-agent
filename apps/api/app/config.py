@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     keycloak_audience: str | None = None
     keycloak_jwks_cache_ttl_seconds: int = 300
 
+    rate_limit_requests: int = 120
+    rate_limit_window_seconds: int = 60
+
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_from: str = "no-reply@patient-health.local"
