@@ -23,20 +23,6 @@ jobs:
         working-directory: apps/api
         run: pytest -q
 
-  web-lockfile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-      - name: Generate package-lock.json
-        working-directory: apps/web
-        run: npm install --package-lock-only --ignore-scripts
-      - name: Print package-lock.json
-        working-directory: apps/web
-        run: cat package-lock.json
-
   web:
     runs-on: ubuntu-latest
     steps:
@@ -46,7 +32,7 @@ jobs:
           node-version: "22"
       - name: Install web dependencies
         working-directory: apps/web
-        run: npm install
+        run: npm ci
       - name: Build web app
         working-directory: apps/web
         env:
