@@ -1,4 +1,21 @@
-from app.services.documents import ALLOWED_CONTENT_TYPES, MAX_DOCUMENT_BYTES, _safe_filename
+import hashlib
+from io import BytesIO
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from app.db.base import Base
+from app.models.document import PatientDocument
+from app.models.patient import Patient
+from app.services.documents import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_DOCUMENT_BYTES,
+    _safe_filename,
+    download_document,
+    upload_document,
+)
 
 
 def test_safe_filename_strips_path_and_unsafe_characters() -> None:
@@ -9,3 +26,87 @@ def test_document_policy_allows_demo_types_and_caps_size() -> None:
     assert "application/pdf" in ALLOWED_CONTENT_TYPES
     assert "image/png" in ALLOWED_CONTENT_TYPES
     assert MAX_DOCUMENT_BYTES == 10 * 1024 * 1024
+
+
+def test_upload_document_stores_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[Patient.__table__, PatientDocument.__table__])
+
+    class FakeMinio:
+        def bucket_exists(self, bucket: str) -> bool:
+            return True
+
+        def put_object(self, bucket: str, key: str, stream: BytesIO, *, length: int, content_type: str) -> None:
+            assert stream.read() == b"hello"
+            assert length == 5
+            assert content_type == "text/plain"
+
+    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: FakeMinio())
+    monkeypatch.setattr("app.services.documents.index_document", lambda *args: None)
+
+    with Session(engine) as db:
+        patient = Patient(first_name="Test", last_name="Patient")
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+        document = upload_document(
+            db,
+            patient,
+            filename="note.txt",
+            content_type="text/plain",
+            content=b"hello",
+            category=None,
+            description=None,
+        )
+
+        assert document.sha256 == hashlib.sha256(b"hello").hexdigest()
+        assert document.size_bytes == 5
+
+
+def test_download_document_rejects_tampered_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[Patient.__table__, PatientDocument.__table__])
+
+    class FakeResponse:
+        def read(self) -> bytes:
+            return b"tampered"
+
+        def close(self) -> None:
+            pass
+
+        def release_conn(self) -> None:
+            pass
+
+    class FakeMinio:
+        def get_object(self, bucket: str, key: str) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: FakeMinio())
+
+    with Session(engine) as db:
+        patient = Patient(first_name="Test", last_name="Patient")
+        db.add(patient)
+        db.flush()
+        document = PatientDocument(
+            patient_id=patient.id,
+            object_key="patients/test/note.txt",
+            original_filename="note.txt",
+            content_type="text/plain",
+            size_bytes=5,
+            sha256=hashlib.sha256(b"hello").hexdigest(),
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        with pytest.raises(RuntimeError, match="integrity check failed"):
+            download_document(db, patient, document.id)
