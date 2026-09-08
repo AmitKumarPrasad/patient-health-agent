@@ -17,10 +17,14 @@ _jwks_cache: dict[str, Any] | None = None
 _jwks_cached_at = 0.0
 
 
-def _get_jwks() -> dict[str, Any]:
+def _get_jwks(*, force_refresh: bool = False) -> dict[str, Any]:
     global _jwks_cache, _jwks_cached_at
     now = monotonic()
-    if _jwks_cache is not None and now - _jwks_cached_at < settings.keycloak_jwks_cache_ttl_seconds:
+    if (
+        not force_refresh
+        and _jwks_cache is not None
+        and now - _jwks_cached_at < settings.keycloak_jwks_cache_ttl_seconds
+    ):
         return _jwks_cache
 
     try:
@@ -53,6 +57,9 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
         jwks = _get_jwks()
         key = next((item for item in jwks.get("keys", []) if item.get("kid") == kid), None)
+        if key is None:
+            jwks = _get_jwks(force_refresh=True)
+            key = next((item for item in jwks.get("keys", []) if item.get("kid") == kid), None)
         if key is None:
             raise JWTError("Signing key not found")
 
