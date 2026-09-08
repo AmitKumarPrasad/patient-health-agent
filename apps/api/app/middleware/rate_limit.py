@@ -22,16 +22,29 @@ class FixedWindowRateLimitMiddleware(BaseHTTPMiddleware):
         self._lock = Lock()
         self._windows: dict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
 
+    @staticmethod
+    def _client_key(request: Request) -> str:
+        client_host = request.client.host if request.client is not None else "unknown"
+        if not settings.rate_limit_trust_forwarded_for:
+            return client_host
+
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if not forwarded_for:
+            return client_host
+
+        first_hop = forwarded_for.split(",", 1)[0].strip()
+        return first_hop or client_host
+
     async def dispatch(self, request: Request, call_next):
         if settings.rate_limit_requests <= 0 or request.method == "OPTIONS" or request.url.path == "/health":
             return await call_next(request)
 
-        client_host = request.client.host if request.client is not None else "unknown"
+        client_key = self._client_key(request)
         now = monotonic()
         window_seconds = settings.rate_limit_window_seconds
 
         with self._lock:
-            count, window_started = self._windows[client_host]
+            count, window_started = self._windows[client_key]
             if now - window_started >= window_seconds:
                 count = 0
                 window_started = now
@@ -44,7 +57,7 @@ class FixedWindowRateLimitMiddleware(BaseHTTPMiddleware):
                     headers={"Retry-After": str(retry_after)},
                 )
 
-            self._windows[client_host] = (count + 1, window_started)
+            self._windows[client_key] = (count + 1, window_started)
             if len(self._windows) > MAX_TRACKED_CLIENTS:
                 cutoff = now - window_seconds
                 stale_clients = [
