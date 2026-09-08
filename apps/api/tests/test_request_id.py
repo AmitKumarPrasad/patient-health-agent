@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.middleware.request_id import REQUEST_ID_HEADER
+from app.middleware.request_id import PROCESS_TIME_HEADER, REQUEST_ID_HEADER
 
 
 client = TestClient(app)
@@ -54,3 +54,13 @@ def test_request_id_header_is_returned_on_unhandled_exception() -> None:
     assert response.json() == {"detail": "Internal server error"}
     assert request_id is not None
     UUID(request_id)
+
+
+def test_process_time_header_is_returned_and_non_negative() -> None:
+    response = client.get("/health")
+
+    process_time = response.headers.get(PROCESS_TIME_HEADER)
+    assert response.status_code == 200
+    assert process_time is not None
+    assert process_time.isdigit()
+    assert int(process_time) >= 0
