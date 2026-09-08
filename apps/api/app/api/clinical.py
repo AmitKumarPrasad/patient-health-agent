@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.models.patient import Patient
 from app.models.provider import Provider
 from app.services.appointment_access import ADMIN_ROLE, PROVIDER_ROLE, PATIENT_ROLE
 from app.services.appointment_lifecycle import transition_status
+from app.services.appointment_tools import book_appointment
 
 router = APIRouter(tags=["clinical"])
 
@@ -48,6 +49,27 @@ class AvailabilityResponse(BaseModel):
     is_available: bool
 
 
+class AvailabilityRequest(BaseModel):
+    available_date: date
+    start_time: time
+    end_time: time
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_end_time(cls, value: time, info):
+        start_time = info.data.get("start_time")
+        if start_time is not None and value <= start_time:
+            raise ValueError("Availability end time must be after start time")
+        return value
+
+
+class AppointmentCreateRequest(BaseModel):
+    provider_id: UUID
+    starts_at: str = Field(min_length=1, max_length=64)
+    ends_at: str = Field(min_length=1, max_length=64)
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class StatusRequest(BaseModel):
     status: str = Field(min_length=1, max_length=20)
 
@@ -57,11 +79,27 @@ class AppointmentStatusResponse(BaseModel):
     status: str
 
 
+class AppointmentCreateResponse(BaseModel):
+    id: UUID
+    provider_id: UUID
+    starts_at: str
+    ends_at: str
+    status: str
+    reason: str | None
+
+
 def _roles(user: dict) -> set[str]:
     roles = set(user.get("realm_access", {}).get("roles", []))
     for client in user.get("resource_access", {}).values():
         roles.update(client.get("roles", []))
     return roles
+
+
+def _provider_for_subject(db: Session, subject: str) -> Provider:
+    provider = db.scalar(select(Provider).where(Provider.external_id == subject))
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider profile not found")
+    return provider
 
 
 @router.get("/api/me", response_model=PatientResponse)
@@ -73,6 +111,15 @@ def me(
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient profile not found")
     return PatientResponse.model_validate(patient, from_attributes=True)
+
+
+@router.get("/api/me/provider", response_model=ProviderResponse)
+def provider_me(
+    user: dict = Depends(require_roles(PROVIDER_ROLE)),
+    db: Session = Depends(get_db),
+) -> ProviderResponse:
+    provider = _provider_for_subject(db, patient_subject(user))
+    return ProviderResponse.model_validate(provider, from_attributes=True)
 
 
 @router.get("/api/providers", response_model=list[ProviderResponse])
@@ -118,6 +165,95 @@ def provider_availability(
     ]
 
 
+@router.post("/api/appointments", response_model=AppointmentCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_appointment(
+    request: AppointmentCreateRequest,
+    user: dict = Depends(require_roles(PATIENT_ROLE)),
+    db: Session = Depends(get_db),
+) -> AppointmentCreateResponse:
+    from datetime import datetime
+
+    try:
+        starts_at = datetime.fromisoformat(request.starts_at)
+        ends_at = datetime.fromisoformat(request.ends_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Appointment times must be valid ISO-8601 timestamps") from exc
+
+    patient = db.scalar(select(Patient).where(Patient.external_id == patient_subject(user)))
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+
+    try:
+        result = book_appointment(
+            db,
+            patient_id=patient.id,
+            provider_id=request.provider_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return AppointmentCreateResponse(
+        id=UUID(result["id"]),
+        provider_id=UUID(result["provider_id"]),
+        starts_at=result["starts_at"],
+        ends_at=result["ends_at"],
+        status=result["status"],
+        reason=request.reason,
+    )
+
+
+@router.post("/api/providers/me/availability", response_model=AvailabilityResponse, status_code=status.HTTP_201_CREATED)
+def create_provider_availability(
+    request: AvailabilityRequest,
+    user: dict = Depends(require_roles(PROVIDER_ROLE)),
+    db: Session = Depends(get_db),
+) -> AvailabilityResponse:
+    provider = _provider_for_subject(db, patient_subject(user))
+    existing = db.scalar(
+        select(Availability).where(
+            Availability.provider_id == provider.id,
+            Availability.available_date == request.available_date,
+            Availability.start_time == request.start_time,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Availability slot already exists")
+
+    overlap = db.scalar(
+        select(Availability).where(
+            Availability.provider_id == provider.id,
+            Availability.available_date == request.available_date,
+            Availability.is_available.is_(True),
+            Availability.start_time < request.end_time,
+            Availability.end_time > request.start_time,
+        )
+    )
+    if overlap is not None:
+        raise HTTPException(status_code=409, detail="Availability slot overlaps an existing slot")
+
+    item = Availability(
+        provider_id=provider.id,
+        available_date=request.available_date,
+        start_time=request.start_time,
+        end_time=request.end_time,
+        is_available=True,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return AvailabilityResponse(
+        id=item.id,
+        provider_id=item.provider_id,
+        available_date=item.available_date,
+        start_time=item.start_time.isoformat(),
+        end_time=item.end_time.isoformat(),
+        is_available=item.is_available,
+    )
+
+
 @router.patch("/api/appointments/{appointment_id}/status", response_model=AppointmentStatusResponse)
 def update_appointment_status(
     appointment_id: UUID,
@@ -147,6 +283,8 @@ def update_appointment_status(
 
     try:
         updated = transition_status(db, appointment_id, request.status)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AppointmentStatusResponse(id=updated.id, status=str(updated.status))
