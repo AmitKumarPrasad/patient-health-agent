@@ -16,7 +16,7 @@ from app.models import Appointment, Availability, Notification, Patient, Provide
 PATIENT_SUBJECT = "integration-patient-subject"
 PROVIDER_ID = UUID("22222222-2222-2222-2222-222222222222")
 PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
-APPOINTMENT_DATE = date(2026, 9, 10)
+APPOINTMENT_DATE = date(2026, 9, 12)
 
 
 def _build_database() -> tuple[object, Session]:
@@ -93,8 +93,8 @@ def test_patient_appointment_api_flow() -> None:
                 "/api/appointments",
                 json={
                     "provider_id": str(PROVIDER_ID),
-                    "starts_at": "2026-09-10T10:00:00+00:00",
-                    "ends_at": "2026-09-10T10:30:00+00:00",
+                    "starts_at": f"{APPOINTMENT_DATE.isoformat()}T10:00:00+00:00",
+                    "ends_at": f"{APPOINTMENT_DATE.isoformat()}T10:30:00+00:00",
                     "reason": "Routine consultation",
                 },
             )
@@ -107,8 +107,8 @@ def test_patient_appointment_api_flow() -> None:
                 "/api/appointments",
                 json={
                     "provider_id": str(PROVIDER_ID),
-                    "starts_at": "2026-09-10T10:00:00+00:00",
-                    "ends_at": "2026-09-10T10:30:00+00:00",
+                    "starts_at": f"{APPOINTMENT_DATE.isoformat()}T10:00:00+00:00",
+                    "ends_at": f"{APPOINTMENT_DATE.isoformat()}T10:30:00+00:00",
                 },
             )
             assert second_booking.status_code == 409
