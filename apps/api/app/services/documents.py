@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import zlib
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -51,20 +52,99 @@ def _validate_document_structure(content_type: str, content: bytes) -> None:
             if not reader.pages:
                 raise ValueError("PDF contains no pages")
         elif content_type == "image/png":
-            # PNG signature is 8 bytes; the first chunk must be a valid IHDR chunk.
-            if len(content) < 24 or content[12:16] != b"IHDR":
-                raise ValueError("PNG is structurally invalid")
-            width = int.from_bytes(content[16:20], "big")
-            height = int.from_bytes(content[20:24], "big")
-            if width == 0 or height == 0:
-                raise ValueError("PNG has invalid dimensions")
+            _validate_png_structure(content)
         elif content_type == "image/jpeg":
-            if len(content) < 4 or not content.endswith(b"\xff\xd9"):
-                raise ValueError("JPEG is structurally invalid")
+            _validate_jpeg_structure(content)
     except ValueError:
         raise
     except Exception as exc:  # noqa: BLE001 - normalize parser failures at the upload boundary.
         raise ValueError("Document structure is invalid") from exc
+
+
+def _validate_png_structure(content: bytes) -> None:
+    if len(content) < 33 or content[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("PNG is structurally invalid")
+
+    offset = 8
+    saw_ihdr = False
+    saw_iend = False
+    while offset < len(content):
+        if offset + 12 > len(content):
+            raise ValueError("PNG is structurally invalid")
+        length = int.from_bytes(content[offset : offset + 4], "big")
+        chunk_end = offset + 12 + length
+        if chunk_end > len(content):
+            raise ValueError("PNG is structurally invalid")
+        chunk_type = content[offset + 4 : offset + 8]
+        chunk_data = content[offset + 8 : offset + 8 + length]
+        stored_crc = int.from_bytes(content[offset + 8 + length : chunk_end], "big")
+        expected_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if stored_crc != expected_crc:
+            raise ValueError("PNG is structurally invalid")
+
+        if not saw_ihdr:
+            if chunk_type != b"IHDR" or length != 13:
+                raise ValueError("PNG is structurally invalid")
+            width = int.from_bytes(chunk_data[:4], "big")
+            height = int.from_bytes(chunk_data[4:8], "big")
+            if width == 0 or height == 0:
+                raise ValueError("PNG has invalid dimensions")
+            saw_ihdr = True
+        elif chunk_type == b"IHDR":
+            raise ValueError("PNG is structurally invalid")
+
+        offset = chunk_end
+        if chunk_type == b"IEND":
+            if length != 0 or offset != len(content):
+                raise ValueError("PNG is structurally invalid")
+            saw_iend = True
+            break
+
+    if not saw_ihdr or not saw_iend:
+        raise ValueError("PNG is structurally invalid")
+
+
+def _validate_jpeg_structure(content: bytes) -> None:
+    if len(content) < 4 or not content.startswith(b"\xff\xd8") or not content.endswith(b"\xff\xd9"):
+        raise ValueError("JPEG is structurally invalid")
+
+    offset = 2
+    saw_frame = False
+    while offset < len(content) - 2:
+        if content[offset] != 0xFF:
+            offset += 1
+            continue
+        while offset < len(content) and content[offset] == 0xFF:
+            offset += 1
+        if offset >= len(content):
+            break
+
+        marker = content[offset]
+        offset += 1
+        if marker == 0xD9:
+            break
+        if marker in {0xD8, 0x01} or 0xD0 <= marker <= 0xD7:
+            continue
+        if offset + 2 > len(content):
+            raise ValueError("JPEG is structurally invalid")
+
+        segment_length = int.from_bytes(content[offset : offset + 2], "big")
+        if segment_length < 2 or offset + segment_length > len(content):
+            raise ValueError("JPEG is structurally invalid")
+
+        if 0xC0 <= marker <= 0xC3 or 0xC5 <= marker <= 0xC7 or 0xC9 <= marker <= 0xCB or 0xCD <= marker <= 0xCF:
+            if segment_length < 8:
+                raise ValueError("JPEG is structurally invalid")
+            height = int.from_bytes(content[offset + 3 : offset + 5], "big")
+            width = int.from_bytes(content[offset + 5 : offset + 7], "big")
+            if width == 0 or height == 0:
+                raise ValueError("JPEG has invalid dimensions")
+            saw_frame = True
+
+        offset += segment_length
+
+    if not saw_frame:
+        raise ValueError("JPEG is structurally invalid")
 
 
 def get_storage_client() -> Minio:
