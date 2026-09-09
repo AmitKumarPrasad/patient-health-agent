@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     minio_bucket: str = "patient-records"
     minio_secure: bool = False
 
+    antivirus_enabled: bool = False
+    antivirus_host: str = "localhost"
+    antivirus_port: int = Field(default=3310, ge=1, le=65535)
+    antivirus_timeout_seconds: float = Field(default=15.0, gt=0)
+
     @property
     def database_url(self) -> str:
         return (
