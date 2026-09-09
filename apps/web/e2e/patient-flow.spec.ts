@@ -76,4 +76,5 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
 
   await appointments.getByRole("button", { name: "Cancel appointment" }).click();
   await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
+  await expect(appointments.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
