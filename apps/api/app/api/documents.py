@@ -128,8 +128,9 @@ def get_patient_document(
         content=content,
         media_type=document.content_type,
         headers={
-            "Cache-Control": "private, no-store",
             "Content-Disposition": f'attachment; filename="{document.original_filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
