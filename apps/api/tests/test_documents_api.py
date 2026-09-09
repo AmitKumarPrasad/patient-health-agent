@@ -9,17 +9,18 @@ from app.models.patient import Patient
 
 def test_patient_document_download_prevents_caching(monkeypatch) -> None:
     document_id = uuid4()
+    patient_id = uuid4()
     document = PatientDocument(
-        patient_id=1,
-        object_key="patients/1/demo/report.txt",
+        patient_id=patient_id,
+        object_key=f"patients/{patient_id}/demo/report.txt",
         original_filename="report.txt",
         content_type="text/plain",
-        size_bytes=7,
+        size_bytes=12,
         sha256=None,
     )
     monkeypatch.setattr(
         "app.api.documents._patient_for_subject",
-        lambda db, subject: Patient(id=1, first_name="Test", last_name="Patient"),
+        lambda db, subject: Patient(id=patient_id, first_name="Test", last_name="Patient"),
     )
     monkeypatch.setattr(
         "app.api.documents.download_document",
