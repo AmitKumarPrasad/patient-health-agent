@@ -54,6 +54,7 @@ export default function Home() {
   const [recordLoading, setRecordLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [documentAction, setDocumentAction] = useState<string | null>(null);
+  const [consultationAction, setConsultationAction] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [recordError, setRecordError] = useState("");
 
@@ -141,6 +142,19 @@ export default function Home() {
     }
   }
 
+  async function joinConsultation(appointment: Appointment) {
+    setConsultationAction(appointment.id);
+    setError("");
+    try {
+      const result = await api.consultation(appointment.id);
+      window.location.assign(result.join_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open video consultation");
+    } finally {
+      setConsultationAction(null);
+    }
+  }
+
   async function askAssistant(event: FormEvent) {
     event.preventDefault();
     if (!message.trim()) return;
@@ -190,19 +204,11 @@ export default function Home() {
     setUploading(true);
     setRecordError("");
     try {
-      const uploadedDocument = await api.uploadDocument(
-        selectedFile,
-        uploadCategory,
-        uploadDescription,
-      );
-      setDocuments((items) => [uploadedDocument, ...items]);
+      await api.uploadDocument(selectedFile, uploadCategory, uploadDescription);
       setSelectedFile(null);
       setUploadCategory("");
       setUploadDescription("");
-      const fileInput = window.document.getElementById(
-        "record-file",
-      ) as HTMLInputElement | null;
-      if (fileInput) fileInput.value = "";
+      setDocuments(await api.documents());
     } catch (err) {
       setRecordError(err instanceof Error ? err.message : "Unable to upload record");
     } finally {
@@ -210,15 +216,15 @@ export default function Home() {
     }
   }
 
-  async function downloadRecord(document: PatientDocument) {
-    setDocumentAction(document.id);
+  async function downloadRecord(doc: PatientDocument) {
+    setDocumentAction(doc.id);
     setRecordError("");
     try {
-      const blob = await api.downloadDocument(document.id);
+      const blob = await api.downloadDocument(doc.id);
       const url = URL.createObjectURL(blob);
-      const anchor = window.document.createElement("a");
+      const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = document.original_filename;
+      anchor.download = doc.original_filename;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -228,13 +234,12 @@ export default function Home() {
     }
   }
 
-  async function deleteRecord(document: PatientDocument) {
-    if (!window.confirm(`Delete ${document.original_filename}?`)) return;
-    setDocumentAction(document.id);
+  async function deleteRecord(doc: PatientDocument) {
+    setDocumentAction(doc.id);
     setRecordError("");
     try {
-      await api.deleteDocument(document.id);
-      setDocuments((items) => items.filter((item) => item.id !== document.id));
+      await api.deleteDocument(doc.id);
+      setDocuments((items) => items.filter((item) => item.id !== doc.id));
     } catch (err) {
       setRecordError(err instanceof Error ? err.message : "Unable to delete record");
     } finally {
@@ -243,28 +248,24 @@ export default function Home() {
   }
 
   if (!auth.ready) {
-    return <main className="container"><p className="muted">Loading secure session…</p></main>;
+    return <main className="center"><p>Loading authentication…</p></main>;
   }
 
   if (!auth.authenticated) {
     return (
-      <main className="container">
-        <section className="hero">
+      <main className="center">
+        <div className="card auth-card">
           <p className="eyebrow">Patient Health Agent</p>
-          <h1>Secure healthcare appointment management</h1>
-          <p className="subtitle">Sign in with Keycloak to search providers, book appointments and use the AI workflow assistant.</p>
-        </section>
-        <section className="card" style={{ maxWidth: 520 }}>
-          <h2>Sign in</h2>
-          <p className="muted">Authentication is handled by your configured Keycloak realm.</p>
-          <button onClick={() => void auth.login()}>Continue to login</button>
-        </section>
+          <h1>Secure healthcare workflow demo</h1>
+          <p className="muted">Sign in to manage appointments, your uploaded records, and the AI assistants.</p>
+          <button onClick={() => void auth.login()}>Sign in</button>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="page">
+    <main>
       <header className="topbar">
         <div className="brand">Patient Health Agent</div>
         <nav className="nav">
@@ -302,7 +303,12 @@ export default function Home() {
                     <p className="muted">Appointment type: {appointment.appointment_type}</p>
                     {appointment.reason && <p>{appointment.reason}</p>}
                     {(appointment.status === "scheduled" || appointment.status === "confirmed") && (
-                      <button className="danger" onClick={() => void cancel(appointment)}>Cancel appointment</button>
+                      <div className="row">
+                        <button className="secondary" disabled={consultationAction === appointment.id} onClick={() => void joinConsultation(appointment)}>
+                          {consultationAction === appointment.id ? "Opening…" : "Join video consultation"}
+                        </button>
+                        <button className="danger" onClick={() => void cancel(appointment)}>Cancel appointment</button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -428,8 +434,6 @@ export default function Home() {
                   {availability.map((slot) => (
                     <button key={slot.id} onClick={() => void book(slot)}>
                       {formatTime(slot.start_time)}
-                      {" – "}
-                      {formatTime(slot.end_time)}
                     </button>
                   ))}
                 </div>
