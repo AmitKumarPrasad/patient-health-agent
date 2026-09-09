@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import TypedDict
 from uuid import UUID
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -60,8 +60,33 @@ def _record_document_search_event(
             outcome=outcome,
             error_message=error_message,
         )
-    except Exception:  # noqa: BLE001 - audit failures must not block document retrieval.
+    except Exception:
         db.rollback()
+
+
+def _document_citations(messages: list) -> list[str]:
+    """Build concise source citations from successful patient-document tool results."""
+    citations: list[str] = []
+    seen: set[tuple[str, int]] = set()
+    for message in messages:
+        if not isinstance(message, ToolMessage) or message.name != "search_patient_documents":
+            continue
+        content = message.content
+        if not isinstance(content, list):
+            continue
+        for result in content:
+            if not isinstance(result, dict):
+                continue
+            document_name = result.get("document_name")
+            chunk_index = result.get("chunk_index")
+            if not document_name or not isinstance(chunk_index, int):
+                continue
+            key = (str(document_name), chunk_index)
+            if key in seen:
+                continue
+            seen.add(key)
+            citations.append(f"{document_name} (chunk {chunk_index})")
+    return citations
 
 
 def build_tools(authenticated_subject: str) -> list[StructuredTool]:
@@ -160,6 +185,9 @@ def build_appointment_graph(authenticated_subject: str):
     def finalize(state: AppointmentAgentState) -> AppointmentAgentState:
         last = state["messages"][-1]
         response = last.content if isinstance(last, AIMessage) else str(last.content)
+        citations = _document_citations(state.get("messages", []))
+        if citations:
+            response = f"{response}\n\nSources: " + "; ".join(citations)
         return {"response": str(response)}
 
     graph = StateGraph(AppointmentAgentState)
