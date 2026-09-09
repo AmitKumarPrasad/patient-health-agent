@@ -157,12 +157,13 @@ def test_patient_document_download_response_disables_caching(
 
     monkeypatch.setattr(
         "app.api.documents._patient_for_subject",
-        lambda db, subject: object(),
+        lambda db, subject: Patient(id=1, first_name="Test", last_name="Patient"),
     )
     monkeypatch.setattr(
         "app.api.documents.download_document",
         lambda db, patient, requested_id: (document, b"hello"),
     )
+    monkeypatch.setattr("app.api.documents.record_event", lambda *args, **kwargs: None)
 
     response = get_patient_document(document_id, {"sub": "demo.patient"}, None)
 
