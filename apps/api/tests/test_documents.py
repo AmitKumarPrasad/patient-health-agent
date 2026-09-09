@@ -1,7 +1,10 @@
 import hashlib
+import struct
+import zlib
 from io import BytesIO
 
 import pytest
+from pypdf import PdfWriter
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -14,6 +17,7 @@ from app.services.documents import (
     MAX_DOCUMENT_BYTES,
     _safe_filename,
     _validate_content_signature,
+    _validate_document_structure,
     download_document,
     upload_document,
 )
@@ -50,6 +54,65 @@ def test_content_signature_rejects_mismatched_binary_type(
 ) -> None:
     with pytest.raises(ValueError, match="does not match its declared type"):
         _validate_content_signature(content_type, content)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", crc)
+
+
+def _valid_png() -> bytes:
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
+    return signature + _png_chunk(b"IHDR", ihdr) + _png_chunk(b"IEND", b"")
+
+
+def _valid_jpeg() -> bytes:
+    # A minimal structurally valid JPEG header with a 1x1 SOF frame.
+    frame = b"\x08" + b"\x00\x01" + b"\x00\x01" + b"\x03" + b"\x01\x11\x00" + b"\x02\x11\x00" + b"\x03\x11\x00"
+    return b"\xff\xd8" + b"\xff\xc0" + struct.pack(">H", len(frame) + 2) + frame + b"\xff\xd9"
+
+
+def test_document_structure_accepts_valid_pdf_png_and_jpeg() -> None:
+    pdf = PdfWriter()
+    pdf.add_blank_page(width=72, height=72)
+    pdf_buffer = BytesIO()
+    pdf.write(pdf_buffer)
+
+    _validate_document_structure("application/pdf", pdf_buffer.getvalue())
+    _validate_document_structure("image/png", _valid_png())
+    _validate_document_structure("image/jpeg", _valid_jpeg())
+    _validate_document_structure("text/plain", b"hello")
+
+
+@pytest.mark.parametrize(
+    ("content_type", "content"),
+    [
+        ("application/pdf", b"%PDF-1.7\ntruncated"),
+        ("image/png", b"\x89PNG\r\n\x1a\n"),
+        ("image/jpeg", b"\xff\xd8\xff\xd9"),
+    ],
+)
+def test_document_structure_rejects_truncated_binary_content(
+    content_type: str, content: bytes
+) -> None:
+    with pytest.raises(ValueError, match="Document structure is invalid|structurally invalid"):
+        _validate_document_structure(content_type, content)
+
+
+def test_png_structure_rejects_bad_chunk_crc() -> None:
+    png = bytearray(_valid_png())
+    png[29] ^= 0xFF
+
+    with pytest.raises(ValueError, match="PNG is structurally invalid"):
+        _validate_document_structure("image/png", bytes(png))
+
+
+def test_jpeg_structure_rejects_missing_frame() -> None:
+    content = b"\xff\xd8\xff\xe0\x00\x02\xff\xd9"
+
+    with pytest.raises(ValueError, match="JPEG is structurally invalid"):
+        _validate_document_structure("image/jpeg", content)
 
 
 def test_record_search_metadata_matches_document_ui_contract() -> None:
