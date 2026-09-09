@@ -65,7 +65,10 @@ def _record_patient_document_event(
     action: str,
     patient: Patient,
     document: PatientDocument | None = None,
+    resource_id: str | None = None,
     metadata: dict | None = None,
+    outcome: str = "success",
+    error_message: str | None = None,
 ) -> None:
     record_event(
         db,
@@ -73,9 +76,11 @@ def _record_patient_document_event(
         actor_role=PATIENT_ROLE,
         action=action,
         resource_type="patient_document",
-        resource_id=str(document.id) if document is not None else None,
+        resource_id=resource_id or (str(document.id) if document is not None else None),
         patient_id=patient.id,
         metadata=metadata,
+        outcome=outcome,
+        error_message=error_message,
     )
 
 
@@ -166,8 +171,32 @@ def get_patient_document(
     try:
         document, content = download_document(db, patient, document_id)
     except LookupError as exc:
+        try:
+            _record_patient_document_event(
+                db,
+                subject=subject,
+                action="record.read",
+                patient=patient,
+                resource_id=str(document_id),
+                outcome="failure",
+                error_message="Document not found",
+            )
+        except Exception:  # noqa: BLE001 - audit failure must not mask the original request outcome.
+            db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
+        try:
+            _record_patient_document_event(
+                db,
+                subject=subject,
+                action="record.read",
+                patient=patient,
+                resource_id=str(document_id),
+                outcome="failure",
+                error_message="Document retrieval failed",
+            )
+        except Exception:  # noqa: BLE001 - audit failure must not mask the original request outcome.
+            db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     _record_patient_document_event(
