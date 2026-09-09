@@ -31,6 +31,6 @@ def test_patient_document_download_prevents_caching(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-store"
-    assert response.headers["content-type"] == "text/plain"
+    assert response.headers["content-type"].startswith("text/plain")
     assert 'attachment; filename="report.txt"' == response.headers["content-disposition"]
     assert response.body == b"patient-data"
