@@ -266,8 +266,33 @@ def delete_document(db: Session, patient: Patient, document_id: UUID) -> None:
     document = get_document(db, patient, document_id)
     client = get_storage_client()
     try:
+        response = client.get_object(settings.minio_bucket, document.object_key)
+        try:
+            content = response.read()
+        finally:
+            response.close()
+            response.release_conn()
+    except Exception as exc:  # noqa: BLE001 - normalize storage errors at service boundary.
+        raise RuntimeError("Unable to read document before deletion") from exc
+
+    try:
         client.remove_object(settings.minio_bucket, document.object_key)
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError("Unable to delete document from object storage") from exc
+
     db.delete(document)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            client.put_object(
+                settings.minio_bucket,
+                document.object_key,
+                BytesIO(content),
+                length=len(content),
+                content_type=document.content_type,
+            )
+        except Exception as restore_exc:  # noqa: BLE001 - preserve the original DB failure.
+            raise RuntimeError("Unable to restore document after database deletion failure") from restore_exc
+        raise
