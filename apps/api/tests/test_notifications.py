@@ -94,7 +94,7 @@ def test_future_reminder_time_is_derived_from_appointment_time() -> None:
 def test_scheduling_reminders_is_idempotent() -> None:
     db = _build_session()
     try:
-        now = datetime(2026, 9, 9, 10, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         appointment = _appointment(db, starts_at=now + timedelta(hours=30))
 
         assert schedule_appointment_reminders(db, appointment) == 2
@@ -118,7 +118,7 @@ def test_scheduling_reminders_is_idempotent() -> None:
 def test_due_reminder_is_sent_once(monkeypatch) -> None:
     db = _build_session()
     try:
-        now = datetime(2026, 9, 9, 10, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         appointment = _appointment(db, starts_at=now + timedelta(hours=2))
         schedule_appointment_reminders(db, appointment)
         sent: list[str] = []
