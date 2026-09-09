@@ -10,11 +10,11 @@ function demoPatientCredentials() {
   return { username: user.username, password: user.credentials[0].value };
 }
 
-test("patient can sign in, manage records, book, list, and cancel an appointment", async ({ page }) => {
+test("patient can sign in, manage records, book, join, and cancel an appointment", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Secure healthcare appointment management" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Continue to login" }).click();
+  await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/realms\/patient-health\/protocol\/openid-connect\/auth/);
 
   const credentials = demoPatientCredentials();
@@ -73,6 +73,7 @@ test("patient can sign in, manage records, book, list, and cancel an appointment
   const appointments = page.locator("#appointments");
   await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
   await expect(appointments.getByText("10:00", { exact: false })).toBeVisible();
+  await expect(appointments.getByRole("button", { name: "Join video consultation" })).toBeVisible();
 
   await appointments.getByRole("button", { name: "Cancel appointment" }).click();
   await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
