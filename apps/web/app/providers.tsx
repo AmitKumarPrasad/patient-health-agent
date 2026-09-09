@@ -12,6 +12,8 @@ type AuthContextValue = {
   logout: () => Promise<void>;
 };
 
+const AuthContext = createContext<AuthContextValue | null>(null);
+
 function readRoles(): string[] {
   const keycloak = getKeycloak();
   const parsed = keycloak.tokenParsed as
