@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.document import PatientDocument
 from app.models.patient import Patient
+from app.services.antivirus import scan_content
 from app.services.document_ingestion import index_document
 
 ALLOWED_CONTENT_TYPES = {
@@ -188,6 +189,7 @@ def upload_document(
         raise ValueError("Document exceeds the 10 MB limit")
     _validate_content_signature(content_type, content)
     _validate_document_structure(content_type, content)
+    scan_content(content)
 
     sha256 = hashlib.sha256(content).hexdigest()
     client = get_storage_client()
