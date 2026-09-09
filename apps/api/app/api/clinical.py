@@ -17,6 +17,7 @@ from app.models.provider import Provider
 from app.services.appointment_access import ADMIN_ROLE, PROVIDER_ROLE, PATIENT_ROLE
 from app.services.appointment_lifecycle import transition_status
 from app.services.appointment_tools import book_appointment
+from app.services.audit import record_event
 from app.services.notifications import (
     cancel_pending_appointment_reminders,
     schedule_appointment_reminders,
@@ -291,6 +292,7 @@ def update_appointment_status(
     if not authorized:
         raise HTTPException(status_code=403, detail="You are not authorized to change this appointment")
 
+    previous_status = str(appointment.status)
     try:
         updated = transition_status(db, appointment_id, request.status)
     except LookupError as exc:
@@ -306,6 +308,25 @@ def update_appointment_status(
         cancel_pending_appointment_reminders(db, appointment_id)
     elif str(updated.status) == AppointmentStatus.CONFIRMED:
         schedule_appointment_reminders(db, updated)
+
+    if previous_status != str(updated.status):
+        actor_role = (
+            ADMIN_ROLE
+            if ADMIN_ROLE in roles
+            else PROVIDER_ROLE
+            if PROVIDER_ROLE in roles
+            else PATIENT_ROLE
+        )
+        record_event(
+            db,
+            actor_subject=subject,
+            actor_role=actor_role,
+            action="appointment.status_change",
+            resource_type="appointment",
+            resource_id=str(appointment_id),
+            patient_id=appointment.patient_id,
+            metadata={"from_status": previous_status, "to_status": str(updated.status)},
+        )
 
     return AppointmentStatusResponse(id=updated.id, status=str(updated.status))
 
