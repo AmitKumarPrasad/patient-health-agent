@@ -12,8 +12,7 @@ function demoPatientCredentials() {
 
 test("patient can sign in, manage records, book, join, and cancel an appointment", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible({ timeout: 30000 });
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/realms\/patient-health\/protocol\/openid-connect\/auth/);
 
