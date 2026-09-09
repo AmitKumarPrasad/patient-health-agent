@@ -5,7 +5,7 @@ from io import BytesIO
 
 import pytest
 from pypdf import PdfWriter
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -18,6 +18,7 @@ from app.services.documents import (
     _safe_filename,
     _validate_content_signature,
     _validate_document_structure,
+    delete_document,
     download_document,
     upload_document,
 )
@@ -206,8 +207,6 @@ def test_upload_document_rejects_mismatched_binary_content(
                 description=None,
             )
 
-    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: None)
-
 
 def test_upload_document_cleans_up_object_when_db_commit_fails(
     monkeypatch: pytest.MonkeyPatch,
@@ -308,3 +307,79 @@ def test_download_document_rejects_tampered_content(monkeypatch: pytest.MonkeyPa
 
         with pytest.raises(RuntimeError, match="integrity check failed"):
             download_document(db, patient, document.id)
+
+
+def test_delete_document_restores_object_when_db_commit_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[Patient.__table__, PatientDocument.__table__])
+
+    class FakeResponse:
+        def __init__(self, content: bytes) -> None:
+            self.content = content
+
+        def read(self) -> bytes:
+            return self.content
+
+        def close(self) -> None:
+            pass
+
+        def release_conn(self) -> None:
+            pass
+
+    class FakeMinio:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.removed_keys: list[str] = []
+            self.restored_keys: list[str] = []
+
+        def get_object(self, bucket: str, key: str) -> FakeResponse:
+            return FakeResponse(self.objects[key])
+
+        def remove_object(self, bucket: str, key: str) -> None:
+            self.removed_keys.append(key)
+            self.objects.pop(key, None)
+
+        def put_object(self, bucket: str, key: str, stream: BytesIO, *, length: int, content_type: str) -> None:
+            content = stream.read()
+            assert length == len(content)
+            self.objects[key] = content
+            self.restored_keys.append(key)
+
+    storage = FakeMinio()
+    monkeypatch.setattr("app.services.documents.get_storage_client", lambda: storage)
+
+    with Session(engine) as db:
+        patient = Patient(first_name="Test", last_name="Patient")
+        db.add(patient)
+        db.flush()
+        document = PatientDocument(
+            patient_id=patient.id,
+            object_key="patients/test/note.txt",
+            original_filename="note.txt",
+            content_type="text/plain",
+            size_bytes=5,
+            sha256=hashlib.sha256(b"hello").hexdigest(),
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        storage.objects[document.object_key] = b"hello"
+
+        def fail_commit() -> None:
+            raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(db, "commit", fail_commit)
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            delete_document(db, patient, document.id)
+
+        assert db.scalar(select(PatientDocument).where(PatientDocument.id == document.id)) is not None
+        assert storage.removed_keys == [document.object_key]
+        assert storage.restored_keys == [document.object_key]
+        assert storage.objects[document.object_key] == b"hello"
