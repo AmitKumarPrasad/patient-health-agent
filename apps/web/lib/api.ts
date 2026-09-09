@@ -53,6 +53,7 @@ export type PatientDocument = {
 };
 
 export type RecordSearchResponse = { documents: PatientDocument[] };
+export type ProviderRecordResponse = { document: PatientDocument; content: string | null };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -80,6 +81,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<Patient>("/api/me"),
+  providerMe: () => request<Provider>("/api/me/provider"),
   providers: (specialty?: string) =>
     request<Provider[]>(
       `/api/providers${specialty ? `?specialty=${encodeURIComponent(specialty)}` : ""}`,
@@ -106,6 +108,19 @@ export const api = {
     }),
   consultation: (id: string) =>
     request<ConsultationResponse>(`/api/appointments/${id}/consultation`),
+  createProviderAvailability: (input: {
+    available_date: string;
+    start_time: string;
+    end_time: string;
+  }) =>
+    request<Availability>("/api/providers/me/availability", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  providerRecords: (patientId: string) =>
+    request<PatientDocument[]>(`/api/provider/patients/${patientId}/records`),
+  providerRecord: (patientId: string, documentId: string) =>
+    request<ProviderRecordResponse>(`/api/provider/patients/${patientId}/records/${documentId}`),
   chat: (message: string) =>
     request<AgentResponse>("/api/agent/chat", {
       method: "POST",
