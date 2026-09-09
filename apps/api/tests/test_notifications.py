@@ -26,7 +26,15 @@ def _build_session() -> Session:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[Patient.__table__, Provider.__table__, Appointment.__table__, Notification.__table__])
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            Patient.__table__,
+            Provider.__table__,
+            Appointment.__table__,
+            Notification.__table__,
+        ],
+    )
     db = Session(engine)
     db.add_all(
         [
@@ -51,7 +59,9 @@ def _build_session() -> Session:
     return db
 
 
-def _appointment(db: Session, *, starts_at: datetime, status: str = AppointmentStatus.SCHEDULED) -> Appointment:
+def _appointment(
+    db: Session, *, starts_at: datetime, status: str = AppointmentStatus.SCHEDULED
+) -> Appointment:
     appointment = Appointment(
         patient_id=PATIENT_ID,
         provider_id=PROVIDER_ID,
