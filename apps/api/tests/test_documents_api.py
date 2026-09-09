@@ -26,6 +26,7 @@ def test_patient_document_download_prevents_caching(monkeypatch) -> None:
         "app.api.documents.download_document",
         lambda db, patient, requested_id: (document, b"patient-data"),
     )
+    monkeypatch.setattr("app.api.documents.record_event", lambda *args, **kwargs: None)
 
     response = get_patient_document(document_id, {"sub": "synthetic-patient"}, Session())
 
