@@ -12,6 +12,7 @@ from app.models.document_chunk import PatientDocumentChunk
 from app.models.patient import Patient
 
 MAX_RESULTS = 5
+MIN_RELEVANCE_SCORE = 0.01
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -42,7 +43,7 @@ def search_patient_document_chunks(
     *,
     limit: int = MAX_RESULTS,
 ) -> list[dict[str, Any]]:
-    """Search only the authenticated patient's indexed document chunks."""
+    """Search only the authenticated patient's relevant indexed document chunks."""
     normalized_query = query.strip()
     if not normalized_query:
         return []
@@ -67,9 +68,10 @@ def search_patient_document_chunks(
             content_lower = chunk.content.lower()
             matched = sum(1 for term in query_terms if term in content_lower)
             score = matched / max(1, len(query_terms))
-        scored.append((score, chunk))
+        if score >= MIN_RELEVANCE_SCORE:
+            scored.append((score, chunk))
 
-    scored.sort(key=lambda item: item[0], reverse=True)
+    scored.sort(key=lambda item: (-item[0], item[1].chunk_index, str(item[1].document_id)))
     results: list[dict[str, Any]] = []
     for score, chunk in scored[:limit]:
         results.append(
