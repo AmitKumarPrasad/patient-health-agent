@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.clinical import StatusRequest, update_appointment_status
 from app.db.base import Base
-from app.models import Appointment, Notification, Patient, Provider
+from app.models import Appointment, AuditEvent, Notification, Patient, Provider
 
 
 PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -30,7 +30,7 @@ def _build_database() -> tuple[object, Session]:
     )
     Base.metadata.create_all(
         engine,
-        tables=[Patient.__table__, Provider.__table__, Appointment.__table__, Notification.__table__],
+        tables=[Patient.__table__, Provider.__table__, Appointment.__table__, Notification.__table__, AuditEvent.__table__],
     )
     db = Session(engine)
     start = datetime(2026, 9, 12, 10, 0, tzinfo=timezone.utc)
@@ -143,6 +143,29 @@ def test_provider_can_progress_assigned_appointment() -> None:
             db,
         )
         assert completed.status == "completed"
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_provider_status_change_is_audited() -> None:
+    engine, db = _build_database()
+    try:
+        update_appointment_status(
+            APPOINTMENT_ID,
+            StatusRequest(status="confirmed"),
+            _user(PROVIDER_SUBJECT, "provider"),
+            db,
+        )
+        event = db.query(AuditEvent).one()
+        assert event.actor_subject == PROVIDER_SUBJECT
+        assert event.actor_role == "provider"
+        assert event.action == "appointment.status_change"
+        assert event.resource_type == "appointment"
+        assert event.resource_id == str(APPOINTMENT_ID)
+        assert event.patient_id == PATIENT_ID
+        assert event.outcome == "success"
+        assert event.metadata_json == {"from_status": "scheduled", "to_status": "confirmed"}
     finally:
         db.close()
         engine.dispose()
