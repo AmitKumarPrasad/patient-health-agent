@@ -32,13 +32,13 @@ def test_scan_content_accepts_clean_result(monkeypatch: pytest.MonkeyPatch) -> N
             calls.append(data)
 
         def recv(self, _size: int) -> bytes:
-            return b"stream: OK\x00"
+            return b"stream: OK" + bytes([0])
 
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: FakeSocket())
 
     antivirus.scan_content(b"hello")
 
-    assert calls[0] == b"zINSTREAM\0"
+    assert calls[0] == b"zINSTREAM" + bytes([0])
     assert calls[1] == b"\x00\x00\x00\x05"
     assert calls[2] == b"hello"
     assert calls[3] == b"\x00\x00\x00\x00"
@@ -58,7 +58,7 @@ def test_scan_content_rejects_infected_result(monkeypatch: pytest.MonkeyPatch) -
             pass
 
         def recv(self, _size: int) -> bytes:
-            return b"stream: Eicar-Test-Signature FOUND\x00"
+            return b"stream: Eicar-Test-Signature FOUND" + bytes([0])
 
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: FakeSocket())
 
@@ -92,7 +92,7 @@ def test_scan_content_rejects_invalid_scanner_response(monkeypatch: pytest.Monke
             pass
 
         def recv(self, _size: int) -> bytes:
-            return b"unexpected response\x00"
+            return b"unexpected response" + bytes([0])
 
     monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: FakeSocket())
 
