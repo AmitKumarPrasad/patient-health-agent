@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_openai import OpenAIEmbeddings
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models.document_chunk import PatientDocumentChunk
@@ -43,7 +43,7 @@ def search_patient_document_chunks(
     *,
     limit: int = MAX_RESULTS,
 ) -> list[dict[str, Any]]:
-    """Search only the authenticated patient's relevant indexed document chunks."""
+    """Search relevant indexed chunks for the authenticated patient with source metadata."""
     normalized_query = query.strip()
     if not normalized_query:
         return []
@@ -51,6 +51,7 @@ def search_patient_document_chunks(
 
     chunks = db.scalars(
         select(PatientDocumentChunk)
+        .options(joinedload(PatientDocumentChunk.document))
         .where(PatientDocumentChunk.patient_id == patient.id)
     ).all()
     if not chunks:
@@ -74,9 +75,12 @@ def search_patient_document_chunks(
     scored.sort(key=lambda item: (-item[0], item[1].chunk_index, str(item[1].document_id)))
     results: list[dict[str, Any]] = []
     for score, chunk in scored[:limit]:
+        document = chunk.document
         results.append(
             {
                 "document_id": str(chunk.document_id),
+                "document_name": document.original_filename if document else None,
+                "document_category": document.category if document else None,
                 "chunk_index": chunk.chunk_index,
                 "content": chunk.content,
                 "score": round(score, 4),
