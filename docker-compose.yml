@@ -74,8 +74,6 @@ services:
         condition: service_started
       minio:
         condition: service_started
-      clamav:
-        condition: service_healthy
 
   notification-worker:
     build:
