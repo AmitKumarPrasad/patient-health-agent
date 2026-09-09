@@ -1,3 +1,4 @@
+from app.models.document import PatientDocument
 from app.models.document_chunk import PatientDocumentChunk
 from app.models.patient import Patient
 from app.services.document_search import search_patient_document_chunks
@@ -69,3 +70,31 @@ def test_document_search_is_deterministic_for_equal_scores() -> None:
     results = search_patient_document_chunks(_fake_db([first, second]), patient, "blood pressure")
 
     assert [result["document_id"] for result in results] == ["a-document", "b-document"]
+
+
+def test_document_search_returns_source_provenance() -> None:
+    patient = Patient(id=1, first_name="A", last_name="Patient")
+    document = PatientDocument(
+        id="doc-1",
+        patient_id=patient.id,
+        object_key="patients/doc-1/report.pdf",
+        original_filename="blood-report.pdf",
+        content_type="application/pdf",
+        size_bytes=100,
+        category="lab",
+    )
+    chunk = PatientDocumentChunk(
+        patient_id=patient.id,
+        document_id=document.id,
+        chunk_index=2,
+        content="hemoglobin 13.2",
+        embedding=None,
+    )
+    chunk.document = document
+
+    results = search_patient_document_chunks(_fake_db([chunk]), patient, "hemoglobin")
+
+    assert results[0]["document_id"] == "doc-1"
+    assert results[0]["document_name"] == "blood-report.pdf"
+    assert results[0]["document_category"] == "lab"
+    assert results[0]["chunk_index"] == 2
