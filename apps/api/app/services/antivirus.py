@@ -29,7 +29,7 @@ def scan_content(content: bytes) -> None:
                 client.sendall(len(chunk).to_bytes(4, "big"))
                 client.sendall(chunk)
             client.sendall((0).to_bytes(4, "big"))
-            response = client.recv(4096).decode("utf-8", errors="replace").strip()
+            response = client.recv(4096).decode("utf-8", errors="replace").strip().rstrip("\\0")
     except (OSError, TimeoutError) as exc:
         raise AntivirusError("Antivirus scanner is unavailable") from exc
 
