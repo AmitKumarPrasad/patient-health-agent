@@ -77,11 +77,12 @@ def _document_citations(messages: list) -> list[str]:
         for result in content:
             if not isinstance(result, dict):
                 continue
+            document_id = result.get("document_id")
             document_name = result.get("document_name")
             chunk_index = result.get("chunk_index")
-            if not document_name or not isinstance(chunk_index, int):
+            if not document_id or not document_name or not isinstance(chunk_index, int):
                 continue
-            key = (str(document_name), chunk_index)
+            key = (str(document_id), chunk_index)
             if key in seen:
                 continue
             seen.add(key)
