@@ -87,7 +87,8 @@ jobs:
         run: curl --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://localhost:3000/
       - name: Remove flaky Google Chrome APT source
         run: |
-          sudo find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec sudo sed -i '/dl\.google\.com\/linux\/chrome/d' {} +
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.sources
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
