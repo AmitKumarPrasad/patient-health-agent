@@ -23,13 +23,13 @@ def scan_content(content: bytes) -> None:
             (settings.antivirus_host, settings.antivirus_port),
             timeout=settings.antivirus_timeout_seconds,
         ) as client:
-            client.sendall(b"zINSTREAM\\0")
+            client.sendall(b"zINSTREAM" + bytes([0]))
             for offset in range(0, len(content), 1024 * 1024):
                 chunk = content[offset : offset + 1024 * 1024]
                 client.sendall(len(chunk).to_bytes(4, "big"))
                 client.sendall(chunk)
             client.sendall((0).to_bytes(4, "big"))
-            response = client.recv(4096).decode("utf-8", errors="replace").strip().rstrip("\\0")
+            response = client.recv(4096).decode("utf-8", errors="replace").strip().rstrip(chr(0))
     except (OSError, TimeoutError) as exc:
         raise AntivirusError("Antivirus scanner is unavailable") from exc
 
