@@ -13,6 +13,7 @@ from app.auth.keycloak import patient_subject, require_roles
 from app.db.session import get_db
 from app.models.document import PatientDocument
 from app.models.patient import Patient
+from app.services.audit import record_event
 from app.services.documents import (
     MAX_DOCUMENT_BYTES,
     delete_document,
@@ -57,13 +58,43 @@ def _serialize(document: PatientDocument) -> DocumentResponse:
     )
 
 
+def _record_patient_document_event(
+    db: Session,
+    *,
+    subject: str,
+    action: str,
+    patient: Patient,
+    document: PatientDocument | None = None,
+    metadata: dict | None = None,
+) -> None:
+    record_event(
+        db,
+        actor_subject=subject,
+        actor_role=PATIENT_ROLE,
+        action=action,
+        resource_type="patient_document",
+        resource_id=str(document.id) if document is not None else None,
+        patient_id=patient.id,
+        metadata=metadata,
+    )
+
+
 @router.get("", response_model=list[DocumentResponse])
 def list_patient_documents(
     user: dict = Depends(require_roles(PATIENT_ROLE)),
     db: Session = Depends(get_db),
 ) -> list[DocumentResponse]:
-    patient = _patient_for_subject(db, patient_subject(user))
-    return [_serialize(item) for item in list_documents(db, patient)]
+    subject = patient_subject(user)
+    patient = _patient_for_subject(db, subject)
+    documents = list_documents(db, patient)
+    _record_patient_document_event(
+        db,
+        subject=subject,
+        action="record.list",
+        patient=patient,
+        metadata={"document_count": len(documents)},
+    )
+    return [_serialize(item) for item in documents]
 
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -74,7 +105,8 @@ def upload_patient_document(
     user: dict = Depends(require_roles(PATIENT_ROLE)),
     db: Session = Depends(get_db),
 ) -> DocumentResponse:
-    patient = _patient_for_subject(db, patient_subject(user))
+    subject = patient_subject(user)
+    patient = _patient_for_subject(db, subject)
     content_type = file.content_type or "application/octet-stream"
 
     if file.size is not None and file.size > MAX_DOCUMENT_BYTES:
@@ -108,6 +140,18 @@ def upload_patient_document(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     finally:
         buffer.close()
+
+    _record_patient_document_event(
+        db,
+        subject=subject,
+        action="record.create",
+        patient=patient,
+        document=document,
+        metadata={
+            "content_type": document.content_type,
+            "size_bytes": document.size_bytes,
+        },
+    )
     return _serialize(document)
 
 
@@ -117,13 +161,26 @@ def get_patient_document(
     user: dict = Depends(require_roles(PATIENT_ROLE)),
     db: Session = Depends(get_db),
 ) -> Response:
-    patient = _patient_for_subject(db, patient_subject(user))
+    subject = patient_subject(user)
+    patient = _patient_for_subject(db, subject)
     try:
         document, content = download_document(db, patient, document_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    _record_patient_document_event(
+        db,
+        subject=subject,
+        action="record.read",
+        patient=patient,
+        document=document,
+        metadata={
+            "content_type": document.content_type,
+            "size_bytes": document.size_bytes,
+        },
+    )
     return Response(
         content=content,
         media_type=document.content_type,
@@ -141,11 +198,26 @@ def remove_patient_document(
     user: dict = Depends(require_roles(PATIENT_ROLE)),
     db: Session = Depends(get_db),
 ) -> Response:
-    patient = _patient_for_subject(db, patient_subject(user))
+    subject = patient_subject(user)
+    patient = _patient_for_subject(db, subject)
+    try:
+        document = next(item for item in list_documents(db, patient) if item.id == document_id)
+    except StopIteration as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
     try:
         delete_document(db, patient, document_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    _record_patient_document_event(
+        db,
+        subject=subject,
+        action="record.delete",
+        patient=patient,
+        document=document,
+        metadata={"content_type": document.content_type, "size_bytes": document.size_bytes},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
