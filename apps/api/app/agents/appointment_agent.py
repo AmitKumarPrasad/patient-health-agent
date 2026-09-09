@@ -13,6 +13,7 @@ from typing_extensions import Annotated
 
 from app.db.session import SessionLocal
 from app.services.appointment_tools import book_appointment, get_available_slots, search_providers
+from app.services.audit import record_event
 from app.services.document_search import search_patient_document_chunks
 from app.services.llm import get_llm
 from app.services.patient_identity import require_patient_by_external_id
@@ -37,6 +38,32 @@ inferred from the user. The booking tool and document search tool do not accept 
 """
 
 
+def _record_document_search_event(
+    db,
+    *,
+    subject: str,
+    patient_id: UUID,
+    result_count: int,
+    outcome: str = "success",
+    error_message: str | None = None,
+) -> None:
+    """Audit PHI retrieval without allowing audit infrastructure to break the agent."""
+    try:
+        record_event(
+            db,
+            actor_subject=subject,
+            actor_role="patient",
+            action="record.search",
+            resource_type="patient_document",
+            patient_id=patient_id,
+            metadata={"result_count": result_count},
+            outcome=outcome,
+            error_message=error_message,
+        )
+    except Exception:  # noqa: BLE001 - audit failures must not block document retrieval.
+        db.rollback()
+
+
 def build_tools(authenticated_subject: str) -> list[StructuredTool]:
     def _search_providers(specialty: str) -> list[dict[str, str]]:
         with SessionLocal() as db:
@@ -49,7 +76,25 @@ def build_tools(authenticated_subject: str) -> list[StructuredTool]:
     def _search_patient_documents(query: str) -> list[dict]:
         with SessionLocal() as db:
             patient = require_patient_by_external_id(db, authenticated_subject)
-            return search_patient_document_chunks(db, patient, query)
+            try:
+                results = search_patient_document_chunks(db, patient, query)
+            except Exception:
+                _record_document_search_event(
+                    db,
+                    subject=authenticated_subject,
+                    patient_id=patient.id,
+                    result_count=0,
+                    outcome="failure",
+                    error_message="Document search failed",
+                )
+                raise
+            _record_document_search_event(
+                db,
+                subject=authenticated_subject,
+                patient_id=patient.id,
+                result_count=len(results),
+            )
+            return results
 
     def _book_authenticated_patient(
         provider_id: str,
