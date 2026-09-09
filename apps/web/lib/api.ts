@@ -40,6 +40,7 @@ export type Appointment = {
 };
 
 export type AgentResponse = { response: string };
+export type ConsultationResponse = { appointment_id: string; join_url: string };
 
 export type PatientDocument = {
   id: string;
@@ -103,6 +104,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status: nextStatus }),
     }),
+  consultation: (id: string) =>
+    request<ConsultationResponse>(`/api/appointments/${id}/consultation`),
   chat: (message: string) =>
     request<AgentResponse>("/api/agent/chat", {
       method: "POST",
