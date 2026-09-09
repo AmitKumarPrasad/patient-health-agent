@@ -7,6 +7,11 @@ from app.api.documents import get_patient_document
 from app.models.patient import Patient
 
 
+class DummyDB:
+    def rollback(self) -> None:
+        pass
+
+
 def _patient() -> Patient:
     return Patient(id=1, first_name="Test", last_name="Patient")
 
@@ -23,7 +28,7 @@ def test_missing_document_read_is_audited(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("app.api.documents.record_event", lambda db, **kwargs: events.append(kwargs))
 
     with pytest.raises(HTTPException) as exc_info:
-        get_patient_document(document_id, {"sub": "demo.patient"}, None)
+        get_patient_document(document_id, {"sub": "demo.patient"}, DummyDB())
 
     assert exc_info.value.status_code == 404
     assert events == [
@@ -55,7 +60,7 @@ def test_document_storage_failure_is_audited_without_masking_error(
     monkeypatch.setattr("app.api.documents.record_event", lambda db, **kwargs: events.append(kwargs))
 
     with pytest.raises(HTTPException) as exc_info:
-        get_patient_document(document_id, {"sub": "demo.patient"}, None)
+        get_patient_document(document_id, {"sub": "demo.patient"}, DummyDB())
 
     assert exc_info.value.status_code == 503
     assert str(exc_info.value.detail) == "storage backend unavailable"
@@ -81,7 +86,7 @@ def test_document_read_preserves_http_error_when_audit_write_fails(
     monkeypatch.setattr("app.api.documents.record_event", fail_audit)
 
     with pytest.raises(HTTPException) as exc_info:
-        get_patient_document(document_id, {"sub": "demo.patient"}, None)
+        get_patient_document(document_id, {"sub": "demo.patient"}, DummyDB())
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Document not found"
