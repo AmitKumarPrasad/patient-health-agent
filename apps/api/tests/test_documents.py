@@ -2,6 +2,7 @@ import hashlib
 import struct
 import zlib
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 from pypdf import PdfWriter
@@ -9,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.api.documents import get_patient_document
 from app.db.base import Base
 from app.models.document import PatientDocument
 from app.models.patient import Patient
@@ -138,6 +140,37 @@ def test_record_search_metadata_matches_document_ui_contract() -> None:
         "description": "Synthetic report",
         "created_at": "",
     }
+
+
+def test_patient_document_download_response_disables_caching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = PatientDocument(
+        patient_id=1,
+        object_key="patients/1/demo/report.txt",
+        original_filename="report.txt",
+        content_type="text/plain",
+        size_bytes=5,
+        sha256=hashlib.sha256(b"hello").hexdigest(),
+    )
+    document_id = uuid4()
+
+    monkeypatch.setattr(
+        "app.api.documents._patient_for_subject",
+        lambda db, subject: object(),
+    )
+    monkeypatch.setattr(
+        "app.api.documents.download_document",
+        lambda db, patient, requested_id: (document, b"hello"),
+    )
+
+    response = get_patient_document(document_id, {}, None)
+
+    assert response.body == b"hello"
+    assert response.headers["content-disposition"] == 'attachment; filename="report.txt"'
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-length"] == "5"
 
 
 def test_upload_document_stores_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
