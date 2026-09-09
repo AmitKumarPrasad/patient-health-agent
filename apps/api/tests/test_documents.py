@@ -164,7 +164,7 @@ def test_patient_document_download_response_disables_caching(
         lambda db, patient, requested_id: (document, b"hello"),
     )
 
-    response = get_patient_document(document_id, {}, None)
+    response = get_patient_document(document_id, {"sub": "demo.patient"}, None)
 
     assert response.body == b"hello"
     assert response.headers["content-disposition"] == 'attachment; filename="report.txt"'
