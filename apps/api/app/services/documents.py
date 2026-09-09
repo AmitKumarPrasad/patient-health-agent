@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from minio import Minio
+from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,30 @@ def _validate_content_signature(content_type: str, content: bytes) -> None:
     }
     if content_type not in signatures or not signatures[content_type]:
         raise ValueError("Document content does not match its declared type")
+
+
+def _validate_document_structure(content_type: str, content: bytes) -> None:
+    """Validate enough structure to reject signature-only polyglot or truncated files."""
+    try:
+        if content_type == "application/pdf":
+            reader = PdfReader(BytesIO(content))
+            if not reader.pages:
+                raise ValueError("PDF contains no pages")
+        elif content_type == "image/png":
+            # PNG signature is 8 bytes; the first chunk must be a valid IHDR chunk.
+            if len(content) < 24 or content[12:16] != b"IHDR":
+                raise ValueError("PNG is structurally invalid")
+            width = int.from_bytes(content[16:20], "big")
+            height = int.from_bytes(content[20:24], "big")
+            if width == 0 or height == 0:
+                raise ValueError("PNG has invalid dimensions")
+        elif content_type == "image/jpeg":
+            if len(content) < 4 or not content.endswith(b"\xff\xd9"):
+                raise ValueError("JPEG is structurally invalid")
+    except ValueError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - normalize parser failures at the upload boundary.
+        raise ValueError("Document structure is invalid") from exc
 
 
 def get_storage_client() -> Minio:
@@ -82,6 +107,7 @@ def upload_document(
     if len(content) > MAX_DOCUMENT_BYTES:
         raise ValueError("Document exceeds the 10 MB limit")
     _validate_content_signature(content_type, content)
+    _validate_document_structure(content_type, content)
 
     sha256 = hashlib.sha256(content).hexdigest()
     client = get_storage_client()
