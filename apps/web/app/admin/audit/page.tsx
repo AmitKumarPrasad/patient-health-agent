@@ -20,6 +20,11 @@ type AuditEvent = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const PAGE_SIZE = 100;
 
+function csvCell(value: unknown): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 export default function AdminAuditPage() {
   const auth = useAuth();
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -87,6 +92,33 @@ export default function AdminAuditPage() {
     }
   }
 
+  function exportCsv() {
+    if (events.length === 0) return;
+    const header = ["id", "created_at", "action", "actor_subject", "actor_role", "resource_type", "resource_id", "patient_id", "outcome", "metadata"];
+    const rows = events.map((event) => [
+      event.id,
+      event.created_at,
+      event.action,
+      event.actor_subject,
+      event.actor_role,
+      event.resource_type,
+      event.resource_id,
+      event.patient_id,
+      event.outcome,
+      event.metadata ? JSON.stringify(event.metadata) : "",
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `audit-events-page-${Math.floor(offset / PAGE_SIZE) + 1}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function applyFilters(event: FormEvent) {
     void loadEvents(event, 0);
   }
@@ -138,8 +170,13 @@ export default function AdminAuditPage() {
 
       <section className="card table-wrap" aria-label="Audit events">
         <div className="table-title">
-          <strong>{events.length} events</strong>
-          <span className="muted">Page {Math.floor(offset / PAGE_SIZE) + 1}</span>
+          <div className="row">
+            <strong>{events.length} events</strong>
+            <span className="muted">Page {Math.floor(offset / PAGE_SIZE) + 1}</span>
+          </div>
+          <button className="button secondary" disabled={loading || events.length === 0} onClick={exportCsv}>
+            Export current page CSV
+          </button>
         </div>
         <table>
           <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Resource</th><th>Patient</th><th>Outcome</th><th>Metadata</th></tr></thead>
