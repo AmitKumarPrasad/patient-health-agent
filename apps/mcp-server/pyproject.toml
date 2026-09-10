@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=78,<81"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "patient-health-agent-mcp"
 version = "0.1.0"
@@ -6,3 +10,6 @@ requires-python = ">=3.12,<3.15"
 dependencies = [
     "mcp>=1.9,<2.0",
 ]
+
+[tool.setuptools]
+py-modules = ["server"]
