@@ -23,6 +23,22 @@ jobs:
         working-directory: apps/api
         run: pytest -q
 
+  mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install MCP and API dependencies
+        run: pip install ./apps/api ./apps/mcp-server "pytest>=8.4,<9" "ruff>=0.12,<1"
+      - name: Ruff
+        working-directory: apps/mcp-server
+        run: ruff check test_server_contract.py
+      - name: Pytest
+        working-directory: apps/mcp-server
+        run: pytest -q
+
   web:
     runs-on: ubuntu-latest
     steps:
