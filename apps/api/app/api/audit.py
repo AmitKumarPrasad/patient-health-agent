@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,14 +30,40 @@ class AuditResponse(BaseModel):
 
 @router.get("", response_model=list[AuditResponse])
 def list_audit_events(
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=100000),
+    patient_id: UUID | None = Query(default=None),
+    actor_subject: str | None = Query(default=None, max_length=255),
+    action: str | None = Query(default=None, max_length=100),
+    resource_type: str | None = Query(default=None, max_length=100),
+    resource_id: str | None = Query(default=None, max_length=255),
+    outcome: str | None = Query(default=None, max_length=20),
     _: dict = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ) -> list[AuditResponse]:
-    limit = max(1, min(limit, 500))
+    query = select(AuditEvent)
+
+    filters = []
+    if patient_id is not None:
+        filters.append(AuditEvent.patient_id == patient_id)
+    if actor_subject and actor_subject.strip():
+        filters.append(AuditEvent.actor_subject == actor_subject.strip())
+    if action and action.strip():
+        filters.append(AuditEvent.action == action.strip())
+    if resource_type and resource_type.strip():
+        filters.append(AuditEvent.resource_type == resource_type.strip())
+    if resource_id and resource_id.strip():
+        filters.append(AuditEvent.resource_id == resource_id.strip())
+    if outcome and outcome.strip():
+        filters.append(AuditEvent.outcome == outcome.strip())
+
+    if filters:
+        query = query.where(*filters)
+
     events = db.scalars(
-        select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)
+        query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).offset(offset).limit(limit)
     ).all()
+
     return [
         AuditResponse(
             id=str(event.id),
