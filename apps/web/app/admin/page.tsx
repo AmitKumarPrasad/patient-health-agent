@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { API_URL } from "../../lib/api";
 import { useAuth } from "../providers";
 
 const cards = [
@@ -59,8 +60,8 @@ export default function AdminPage() {
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Operational checks</h2>
         <div className="row">
-          <a className="button secondary" href="http://localhost:8000/health" target="_blank" rel="noreferrer">API health</a>
-          <a className="button secondary" href="http://localhost:8000/ready" target="_blank" rel="noreferrer">API readiness</a>
+          <a className="button secondary" href={`${API_URL}/health`} target="_blank" rel="noreferrer">API health</a>
+          <a className="button secondary" href={`${API_URL}/ready`} target="_blank" rel="noreferrer">API readiness</a>
           <a className="button secondary" href="/admin/audit">Review recent audit events</a>
         </div>
       </section>
