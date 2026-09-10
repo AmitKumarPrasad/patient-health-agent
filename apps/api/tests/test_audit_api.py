@@ -1,11 +1,14 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.api.audit import list_audit_events
+from app.auth.keycloak import require_roles
 from app.db.base import Base
 from app.models import AuditEvent, Patient
 
@@ -165,3 +168,35 @@ def test_admin_audit_history_filters_exact_actor_and_resource() -> None:
     finally:
         db.close()
         engine.dispose()
+
+
+def test_admin_audit_dependency_rejects_non_admin_role() -> None:
+    dependency = require_roles("admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        dependency({"sub": "patient-1", "realm_access": {"roles": ["patient"]}})
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Insufficient role"
+
+
+def test_admin_audit_dependency_accepts_realm_admin_role() -> None:
+    dependency = require_roles("admin")
+
+    user = dependency({"sub": "admin-1", "realm_access": {"roles": ["admin"]}})
+
+    assert user["sub"] == "admin-1"
+
+
+def test_admin_audit_dependency_accepts_client_admin_role() -> None:
+    dependency = require_roles("admin")
+
+    user = dependency(
+        {
+            "sub": "admin-2",
+            "realm_access": {"roles": []},
+            "resource_access": {"patient-health-agent": {"roles": ["admin"]}},
+        }
+    )
+
+    assert user["sub"] == "admin-2"
