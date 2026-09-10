@@ -23,6 +23,7 @@ An open-source, self-hosted healthcare appointment and patient engagement platfo
 - Jitsi Meet
 - Mailpit
 - Docker Compose
+- MCP
 - OpenAI + Tavily for the configured AI workflow
 
 ## Repository structure
@@ -30,15 +31,15 @@ An open-source, self-hosted healthcare appointment and patient engagement platfo
 ```text
 apps/
   web/          # Next.js patient UI
-  api/          # FastAPI backend
-  agent/        # LangGraph agent workflows (planned expansion)
-  mcp-server/   # MCP tools exposed to agents (planned)
+  api/          # FastAPI backend and LangGraph orchestration
+  agent/        # agent workflow components
+  mcp-server/   # MCP tools backed by the validated application service layer
 docs/           # Architecture and product documentation
 ```
 
 ## Current workflow
 
-The current web application and API provide:
+The current web application, API, LangGraph workflow, and MCP server provide:
 
 1. Keycloak browser authentication using Authorization Code + PKCE.
 2. Patient profile loading from the authenticated Keycloak subject.
@@ -50,10 +51,11 @@ The current web application and API provide:
 8. Authorized provider access to patient records.
 9. Video consultation launch for eligible appointments.
 10. Scheduled appointment reminders with an admin operation to process due notifications.
-11. Admin audit-log search with filtering plus auditable notification processing.
+11. Admin audit-log search with filtering, pagination, and CSV export.
 12. API health and database readiness endpoints for operational checks.
+13. MCP tools for provider discovery, availability lookup, authenticated patient-record search, and appointment booking.
 
-The frontend talks only to FastAPI; it never connects directly to PostgreSQL or the AI provider.
+The frontend talks only to FastAPI; it never connects directly to PostgreSQL or the AI provider. The LangGraph agent and MCP server both delegate business operations to the same validated service layer rather than duplicating scheduling or record-access rules.
 
 ## Operational endpoints
 
@@ -61,7 +63,19 @@ The frontend talks only to FastAPI; it never connects directly to PostgreSQL or 
 - `GET /health/db` — database connectivity check.
 - `GET /ready` — readiness check that returns HTTP 503 when the database is unavailable.
 - `GET /api/admin/audit` — admin-only audit event search.
+- `GET /api/admin/audit/export` — admin-only filtered audit CSV export.
 - `POST /api/admin/notifications/process` — admin-only processing of due notifications.
+
+## MCP server
+
+The MCP server is a separate Docker service and runs over stdio for trusted agent/client integration. Its tools are deliberately narrow and delegate to the existing application service layer:
+
+- `find_providers(specialty)`
+- `available_slots(provider_id, requested_date)`
+- `patient_records(subject, query)`
+- `book_slot(subject, provider_id, starts_at, ends_at, reason)`
+
+Patient identity is represented by the authenticated Keycloak subject at the tool boundary; the MCP layer does not authorize requests using a caller-supplied patient database ID.
 
 ## Run locally
 
