@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { API_URL } from "../../lib/api";
 import { useAuth } from "../providers";
 
@@ -19,13 +19,40 @@ const cards = [
   },
 ];
 
+type CheckState = "checking" | "healthy" | "unhealthy";
+
 export default function AdminPage() {
   const auth = useAuth();
+  const [health, setHealth] = useState<CheckState>("checking");
+  const [readiness, setReadiness] = useState<CheckState>("checking");
 
   useEffect(() => {
     if (auth.ready && auth.authenticated && auth.hasRole("admin")) {
       document.title = "Admin Operations";
     }
+  }, [auth.ready, auth.authenticated, auth.roles]);
+
+  useEffect(() => {
+    if (!auth.ready || !auth.authenticated || !auth.hasRole("admin")) return;
+
+    let active = true;
+    const check = async (path: string, setState: (state: CheckState) => void) => {
+      try {
+        const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+        if (active) setState(response.ok ? "healthy" : "unhealthy");
+      } catch {
+        if (active) setState("unhealthy");
+      }
+    };
+
+    void Promise.all([
+      check("/health", setHealth),
+      check("/ready", setReadiness),
+    ]);
+
+    return () => {
+      active = false;
+    };
   }, [auth.ready, auth.authenticated, auth.roles]);
 
   if (!auth.ready) return <main className="container"><p>Loading…</p></main>;
@@ -35,6 +62,9 @@ export default function AdminPage() {
   if (!auth.hasRole("admin")) {
     return <main className="container"><h1>Admin Operations</h1><p>You do not have permission to access administration.</p></main>;
   }
+
+  const statusLabel = (state: CheckState) =>
+    state === "checking" ? "Checking…" : state === "healthy" ? "Healthy" : "Unavailable";
 
   return (
     <main className="container">
@@ -60,9 +90,10 @@ export default function AdminPage() {
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Operational checks</h2>
         <div className="row">
-          <a className="button secondary" href={`${API_URL}/health`} target="_blank" rel="noreferrer">API health</a>
-          <a className="button secondary" href={`${API_URL}/ready`} target="_blank" rel="noreferrer">API readiness</a>
-          <a className="button secondary" href="/admin/audit">Review recent audit events</a>
+          <span className="button secondary" aria-live="polite">API health: {statusLabel(health)}</span>
+          <span className="button secondary" aria-live="polite">API readiness: {statusLabel(readiness)}</span>
+          <a className="button secondary" href={`${API_URL}/health`} target="_blank" rel="noreferrer">Open health endpoint</a>
+          <a className="button secondary" href={`${API_URL}/ready`} target="_blank" rel="noreferrer">Open readiness endpoint</a>
         </div>
       </section>
     </main>
