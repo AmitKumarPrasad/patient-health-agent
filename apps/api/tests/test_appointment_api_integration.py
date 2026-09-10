@@ -109,6 +109,15 @@ def test_patient_appointment_api_flow() -> None:
             assert appointment["provider_id"] == str(PROVIDER_ID)
             assert appointment["status"] == "scheduled"
 
+            booking_event = db.query(AuditEvent).one()
+            assert booking_event.actor_subject == PATIENT_SUBJECT
+            assert booking_event.actor_role == "patient"
+            assert booking_event.action == "appointment.booked"
+            assert booking_event.resource_type == "appointment"
+            assert booking_event.resource_id == appointment["id"]
+            assert booking_event.patient_id == PATIENT_ID
+            assert booking_event.metadata_json["provider_id"] == str(PROVIDER_ID)
+
             second_booking = client.post(
                 "/api/appointments",
                 json={
