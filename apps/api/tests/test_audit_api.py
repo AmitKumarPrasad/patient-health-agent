@@ -184,15 +184,12 @@ def test_admin_audit_dependency_rejects_non_admin_role() -> None:
 
 def test_admin_audit_dependency_accepts_realm_admin_role() -> None:
     dependency = require_roles("admin")
-
     user = dependency({"sub": "admin-1", "realm_access": {"roles": ["admin"]}})
-
     assert user["sub"] == "admin-1"
 
 
 def test_admin_audit_dependency_accepts_client_admin_role() -> None:
     dependency = require_roles("admin")
-
     user = dependency(
         {
             "sub": "admin-2",
@@ -200,17 +197,21 @@ def test_admin_audit_dependency_accepts_client_admin_role() -> None:
             "resource_access": {"patient-health-agent": {"roles": ["admin"]}},
         }
     )
-
     assert user["sub"] == "admin-2"
 
 
 def _build_admin_audit_client(db: Session, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router)
-
     app.dependency_overrides[get_db] = lambda: db
-    route = next(route for route in app.routes if getattr(route, "path", None) == "/api/admin/audit")
-    role_dependency = route.dependant.dependencies[0].call
+
+    role_dependency = next(
+        dependency.call
+        for route in app.routes
+        if getattr(route, "path", None) == "/api/admin/audit"
+        for dependency in route.dependant.dependencies
+        if getattr(dependency.call, "__name__", "") == "dependency"
+    )
     app.dependency_overrides[role_dependency] = lambda: user
     return TestClient(app)
 
@@ -223,7 +224,6 @@ def test_admin_audit_http_route_returns_filtered_events() -> None:
             "/api/admin/audit",
             params={"patient_id": str(PATIENT_ID), "action": "document.search"},
         )
-
         assert response.status_code == 200
         assert response.json() == [
             {
@@ -253,7 +253,6 @@ def test_admin_audit_http_route_rejects_non_admin() -> None:
     )
     try:
         response = client.get("/api/admin/audit")
-
         assert response.status_code == 403
         assert response.json()["detail"] == "Insufficient role"
     finally:
