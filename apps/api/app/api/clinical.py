@@ -186,7 +186,8 @@ def create_appointment(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Appointment times must be valid ISO-8601 timestamps") from exc
 
-    patient = db.scalar(select(Patient).where(Patient.external_id == patient_subject(user)))
+    subject = patient_subject(user)
+    patient = db.scalar(select(Patient).where(Patient.external_id == subject))
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient profile not found")
 
@@ -198,6 +199,9 @@ def create_appointment(
             starts_at=starts_at,
             ends_at=ends_at,
             reason=request.reason,
+            audit_subject=subject,
+            audit_role=PATIENT_ROLE,
+            audit_source="rest_api",
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
