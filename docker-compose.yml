@@ -1,30 +1,30 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
       POSTGRES_USER: ${POSTGRES_USER:-patient_health}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
       - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patient_health} -d ${POSTGRES_DB:-patient_health}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.3
-    command: start-dev --http-port=8080 --import-realm
+    image: quay.io/keycloak/keycloak:latest
+    command: start-dev --import-realm
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
       - "8080:8080"
     volumes:
-      - ./infrastructure/keycloak:/opt/keycloak/data/import:ro
+      - ./infra/keycloak:/opt/keycloak/data/import
 
   api:
     build:
@@ -32,39 +32,27 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_NAME: ${APP_NAME:-patient-health-agent}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
       POSTGRES_USER: ${POSTGRES_USER:-patient_health}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://localhost:8080/realms/patient-health}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/patient-health/protocol/openid-connect/certs}
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_FROM: ${SMTP_FROM:-no-reply@patient-health.local}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-patient-health}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-patient-health-api}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-patient-records}
-      MINIO_SECURE: ${MINIO_SECURE:-false}
-      ANTIVIRUS_ENABLED: ${ANTIVIRUS_ENABLED:-false}
-      ANTIVIRUS_HOST: ${ANTIVIRUS_HOST:-clamav}
-      ANTIVIRUS_PORT: ${ANTIVIRUS_PORT:-3310}
-      ANTIVIRUS_TIMEOUT_SECONDS: ${ANTIVIRUS_TIMEOUT_SECONDS:-15}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-no-reply@patient-health.local}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     ports:
       - "8000:8000"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +62,12 @@ services:
         condition: service_started
       minio:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/ready\", timeout=2)'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   notification-worker:
     build:
@@ -101,6 +95,7 @@ services:
       context: .
       dockerfile: apps/mcp-server/Dockerfile
     environment:
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-streamable-http}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
