@@ -357,4 +357,13 @@ def process_notifications(
 ) -> NotificationProcessResponse:
     from app.services.notifications import process_pending_notifications
 
-    return NotificationProcessResponse(processed=process_pending_notifications(db))
+    processed = process_pending_notifications(db)
+    record_event(
+        db,
+        actor_subject=patient_subject(user),
+        actor_role=ADMIN_ROLE,
+        action="notification.process",
+        resource_type="notification",
+        metadata={"processed": processed},
+    )
+    return NotificationProcessResponse(processed=processed)
