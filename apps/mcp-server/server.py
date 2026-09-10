@@ -15,7 +15,7 @@ from app.services.patient_identity import require_patient_by_external_id
 from app.services.record_tools import search_patient_documents
 
 
-mcp = FastMCP("patient-health-agent")
+mcp = FastMCP("patient-health-agent", stateless_http=True, json_response=True)
 
 
 @mcp.tool()
@@ -65,4 +65,10 @@ def book_slot(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
+    if transport == "streamable-http":
+        mcp.run(transport="streamable-http")
+    elif transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        raise ValueError("MCP_TRANSPORT must be 'stdio' or 'streamable-http'")
