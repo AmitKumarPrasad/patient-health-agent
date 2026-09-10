@@ -2,14 +2,16 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.api.audit import list_audit_events
+from app.api.audit import list_audit_events, router
 from app.auth.keycloak import require_roles
 from app.db.base import Base
+from app.db.session import get_db
 from app.models import AuditEvent, Patient
 
 
@@ -200,3 +202,61 @@ def test_admin_audit_dependency_accepts_client_admin_role() -> None:
     )
 
     assert user["sub"] == "admin-2"
+
+
+def _build_admin_audit_client(db: Session, user: dict) -> TestClient:
+    app = FastAPI()
+    app.include_router(router)
+
+    app.dependency_overrides[get_db] = lambda: db
+    route = next(route for route in app.routes if getattr(route, "path", None) == "/api/admin/audit")
+    role_dependency = route.dependant.dependencies[0].call
+    app.dependency_overrides[role_dependency] = lambda: user
+    return TestClient(app)
+
+
+def test_admin_audit_http_route_returns_filtered_events() -> None:
+    engine, db = _build_database()
+    client = _build_admin_audit_client(db, {"sub": "admin-1", "realm_access": {"roles": ["admin"]}})
+    try:
+        response = client.get(
+            "/api/admin/audit",
+            params={"patient_id": str(PATIENT_ID), "action": "document.search"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == [
+            {
+                "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                "actor_subject": "patient-1",
+                "actor_role": "patient",
+                "action": "document.search",
+                "resource_type": "document",
+                "resource_id": "document-1",
+                "patient_id": str(PATIENT_ID),
+                "created_at": "2026-09-10T10:00:00+00:00",
+                "outcome": "success",
+                "metadata": {"query_length": 12},
+            }
+        ]
+    finally:
+        client.close()
+        db.close()
+        engine.dispose()
+
+
+def test_admin_audit_http_route_rejects_non_admin() -> None:
+    engine, db = _build_database()
+    client = _build_admin_audit_client(
+        db,
+        {"sub": "patient-1", "realm_access": {"roles": ["patient"]}},
+    )
+    try:
+        response = client.get("/api/admin/audit")
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Insufficient role"
+    finally:
+        client.close()
+        db.close()
+        engine.dispose()
