@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.audit import AuditEvent
 
 router = APIRouter(prefix="/api/admin/audit", tags=["admin-audit"])
+admin_role_dependency = require_roles("admin")
 
 
 class AuditResponse(BaseModel):
@@ -38,7 +39,7 @@ def list_audit_events(
     resource_type: str | None = Query(default=None, max_length=100),
     resource_id: str | None = Query(default=None, max_length=255),
     outcome: str | None = Query(default=None, max_length=20),
-    _: dict = Depends(require_roles("admin")),
+    _: dict = Depends(admin_role_dependency),
     db: Session = Depends(get_db),
 ) -> list[AuditResponse]:
     query = select(AuditEvent)
