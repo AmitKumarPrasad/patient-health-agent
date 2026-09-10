@@ -37,9 +37,12 @@ def test_mcp_exposes_expected_application_tools() -> None:
     assert _tool_functions() == EXPECTED_TOOLS
 
 
-def test_mcp_server_uses_stdio_transport_entrypoint() -> None:
+def test_mcp_server_supports_configurable_transports() -> None:
     source = SERVER_PATH.read_text(encoding="utf-8")
+    assert 'os.getenv("MCP_TRANSPORT", "stdio")' in source
+    assert 'mcp.run(transport="streamable-http")' in source
     assert 'mcp.run(transport="stdio")' in source
+    assert "MCP_TRANSPORT must be 'stdio' or 'streamable-http'" in source
 
 
 def test_mcp_tools_delegate_to_application_services() -> None:
