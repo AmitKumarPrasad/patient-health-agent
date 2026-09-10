@@ -55,7 +55,7 @@ export type PatientDocument = {
 export type RecordSearchResponse = { documents: PatientDocument[] };
 export type ProviderRecordResponse = { document: PatientDocument; content: string | null };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const keycloak = getKeycloak();
