@@ -20,10 +20,14 @@ def _tool_functions() -> set[str]:
         if not isinstance(node, ast.FunctionDef):
             continue
         for decorator in node.decorator_list:
-            if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute):
-                if isinstance(decorator.func.value, ast.Name) and decorator.func.value.id == "mcp":
-                    if decorator.func.attr == "tool":
-                        names.add(node.name)
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and isinstance(decorator.func.value, ast.Name)
+                and decorator.func.value.id == "mcp"
+                and decorator.func.attr == "tool"
+            ):
+                names.add(node.name)
             elif isinstance(decorator, ast.Name) and decorator.id == "tool":
                 names.add(node.name)
     return names
