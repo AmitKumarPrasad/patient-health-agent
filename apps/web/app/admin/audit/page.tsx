@@ -18,6 +18,7 @@ type AuditEvent = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const PAGE_SIZE = 100;
 
 export default function AdminAuditPage() {
   const auth = useAuth();
@@ -26,12 +27,13 @@ export default function AdminAuditPage() {
   const [actor, setActor] = useState("");
   const [patientId, setPatientId] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [processMessage, setProcessMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadEvents(event?: FormEvent) {
+  async function loadEvents(event?: FormEvent, nextOffset = offset) {
     event?.preventDefault();
     if (!auth.authenticated || !auth.hasRole("admin")) return;
     setLoading(true);
@@ -39,7 +41,7 @@ export default function AdminAuditPage() {
     try {
       const keycloak = getKeycloak();
       await keycloak.updateToken(30);
-      const params = new URLSearchParams({ limit: "100" });
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
       if (action.trim()) params.set("action", action.trim());
       if (actor.trim()) params.set("actor_subject", actor.trim());
       if (patientId.trim()) params.set("patient_id", patientId.trim());
@@ -52,6 +54,7 @@ export default function AdminAuditPage() {
         throw new Error(body?.detail ?? `Request failed with status ${response.status}`);
       }
       setEvents((await response.json()) as AuditEvent[]);
+      setOffset(nextOffset);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load audit events");
     } finally {
@@ -76,7 +79,7 @@ export default function AdminAuditPage() {
         throw new Error(body?.detail ?? `Request failed with status ${response.status}`);
       }
       setProcessMessage(`${body?.processed ?? 0} due notification(s) processed.`);
-      await loadEvents();
+      await loadEvents(undefined, offset);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to process notifications");
     } finally {
@@ -84,8 +87,17 @@ export default function AdminAuditPage() {
     }
   }
 
+  function applyFilters(event: FormEvent) {
+    void loadEvents(event, 0);
+  }
+
+  function changePage(nextOffset: number) {
+    if (nextOffset < 0 || loading) return;
+    void loadEvents(undefined, nextOffset);
+  }
+
   useEffect(() => {
-    if (auth.ready && auth.authenticated && auth.hasRole("admin")) void loadEvents();
+    if (auth.ready && auth.authenticated && auth.hasRole("admin")) void loadEvents(undefined, 0);
   }, [auth.ready, auth.authenticated, auth.roles]);
 
   if (!auth.ready) return <main className="container"><p>Loading…</p></main>;
@@ -114,7 +126,7 @@ export default function AdminAuditPage() {
 
       {processMessage && <p className="success">{processMessage}</p>}
 
-      <form className="card filter-grid" onSubmit={loadEvents}>
+      <form className="card filter-grid" onSubmit={applyFilters}>
         <label>Action<input value={action} onChange={(e) => setAction(e.target.value)} placeholder="appointment.booked" /></label>
         <label>Actor subject<input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="user or subject" /></label>
         <label>Patient ID<input value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder="UUID" /></label>
@@ -125,7 +137,10 @@ export default function AdminAuditPage() {
       {error && <p className="error">{error}</p>}
 
       <section className="card table-wrap" aria-label="Audit events">
-        <div className="table-title"><strong>{events.length} events</strong><span className="muted">Newest first</span></div>
+        <div className="table-title">
+          <strong>{events.length} events</strong>
+          <span className="muted">Page {Math.floor(offset / PAGE_SIZE) + 1}</span>
+        </div>
         <table>
           <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Resource</th><th>Patient</th><th>Outcome</th><th>Metadata</th></tr></thead>
           <tbody>
@@ -143,6 +158,15 @@ export default function AdminAuditPage() {
             {!loading && events.length === 0 && <tr><td colSpan={7} className="empty">No audit events match the current filters.</td></tr>}
           </tbody>
         </table>
+        <div className="row" style={{ justifyContent: "space-between", marginTop: "1rem" }}>
+          <button className="button secondary" disabled={loading || offset === 0} onClick={() => changePage(offset - PAGE_SIZE)}>
+            Previous
+          </button>
+          <span className="muted">Showing {events.length} of up to {PAGE_SIZE} events</span>
+          <button className="button secondary" disabled={loading || events.length < PAGE_SIZE} onClick={() => changePage(offset + PAGE_SIZE)}>
+            Next
+          </button>
+        </div>
       </section>
     </main>
   );
