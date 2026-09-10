@@ -49,6 +49,9 @@ def test_mcp_tools_delegate_to_application_services() -> None:
     tree = ast.parse(SERVER_PATH.read_text(encoding="utf-8"))
     source = ast.unparse(tree)
     assert "search_providers(db, specialty)" in source
-    assert "get_available_slots(db, UUID(provider_id), date.fromisoformat(requested_date))" in source
+    assert (
+        "get_available_slots(db, UUID(provider_id), date.fromisoformat(requested_date))"
+        in source
+    )
     assert "search_patient_documents(query, subject)" in source
     assert "book_appointment(" in source
