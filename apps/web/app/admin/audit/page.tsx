@@ -27,6 +27,8 @@ export default function AdminAuditPage() {
   const [patientId, setPatientId] = useState("");
   const [outcome, setOutcome] = useState("");
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processMessage, setProcessMessage] = useState("");
   const [error, setError] = useState("");
 
   async function loadEvents(event?: FormEvent) {
@@ -57,6 +59,31 @@ export default function AdminAuditPage() {
     }
   }
 
+  async function processNotifications() {
+    if (!auth.authenticated || !auth.hasRole("admin")) return;
+    setProcessing(true);
+    setError("");
+    setProcessMessage("");
+    try {
+      const keycloak = getKeycloak();
+      await keycloak.updateToken(30);
+      const response = await fetch(`${API_URL}/api/admin/notifications/process`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.detail ?? `Request failed with status ${response.status}`);
+      }
+      setProcessMessage(`${body?.processed ?? 0} due notification(s) processed.`);
+      await loadEvents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to process notifications");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   useEffect(() => {
     if (auth.ready && auth.authenticated && auth.hasRole("admin")) void loadEvents();
   }, [auth.ready, auth.authenticated, auth.roles]);
@@ -77,8 +104,15 @@ export default function AdminAuditPage() {
           <h1>Audit log</h1>
           <p className="muted">Review security-relevant activity across patients, providers, appointments, and records.</p>
         </div>
-        <a href="/" className="button secondary">Dashboard</a>
+        <div className="row">
+          <button className="button secondary" disabled={processing} onClick={() => void processNotifications()}>
+            {processing ? "Processing…" : "Process due notifications"}
+          </button>
+          <a href="/" className="button secondary">Dashboard</a>
+        </div>
       </div>
+
+      {processMessage && <p className="success">{processMessage}</p>}
 
       <form className="card filter-grid" onSubmit={loadEvents}>
         <label>Action<input value={action} onChange={(e) => setAction(e.target.value)} placeholder="appointment.booked" /></label>
