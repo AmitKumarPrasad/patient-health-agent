@@ -186,8 +186,7 @@ def create_appointment(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Appointment times must be valid ISO-8601 timestamps") from exc
 
-    patient_subject_value = patient_subject(user)
-    patient = db.scalar(select(Patient).where(Patient.external_id == patient_subject_value))
+    patient = db.scalar(select(Patient).where(Patient.external_id == patient_subject(user)))
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient profile not found")
 
@@ -206,20 +205,6 @@ def create_appointment(
     appointment = db.get(Appointment, UUID(result["id"]))
     if appointment is not None:
         schedule_appointment_reminders(db, appointment)
-        record_event(
-            db,
-            actor_subject=patient_subject_value,
-            actor_role=PATIENT_ROLE,
-            action="appointment.booked",
-            resource_type="appointment",
-            resource_id=str(appointment.id),
-            patient_id=appointment.patient_id,
-            metadata={
-                "provider_id": str(appointment.provider_id),
-                "starts_at": appointment.starts_at.isoformat(),
-                "ends_at": appointment.ends_at.isoformat(),
-            },
-        )
 
     return AppointmentCreateResponse(
         id=UUID(result["id"]),
@@ -237,7 +222,8 @@ def create_provider_availability(
     user: dict = Depends(require_roles(PROVIDER_ROLE)),
     db: Session = Depends(get_db),
 ) -> AvailabilityResponse:
-    provider = _provider_for_subject(db, patient_subject(user))
+    subject = patient_subject(user)
+    provider = _provider_for_subject(db, subject)
     existing = db.scalar(
         select(Availability).where(
             Availability.provider_id == provider.id,
@@ -270,6 +256,20 @@ def create_provider_availability(
     db.add(item)
     db.commit()
     db.refresh(item)
+    record_event(
+        db,
+        actor_subject=subject,
+        actor_role=PROVIDER_ROLE,
+        action="availability.create",
+        resource_type="availability",
+        resource_id=str(item.id),
+        metadata={
+            "provider_id": str(provider.id),
+            "available_date": item.available_date.isoformat(),
+            "start_time": item.start_time.isoformat(),
+            "end_time": item.end_time.isoformat(),
+        },
+    )
     return AvailabilityResponse(
         id=item.id,
         provider_id=item.provider_id,
