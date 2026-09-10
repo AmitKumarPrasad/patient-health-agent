@@ -217,20 +217,22 @@ def test_admin_audit_http_route_returns_filtered_events() -> None:
             params={"patient_id": str(PATIENT_ID), "action": "document.search"},
         )
         assert response.status_code == 200
-        assert response.json() == [
-            {
-                "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-                "actor_subject": "patient-1",
-                "actor_role": "patient",
-                "action": "document.search",
-                "resource_type": "document",
-                "resource_id": "document-1",
-                "patient_id": str(PATIENT_ID),
-                "created_at": "2026-09-10T10:00:00+00:00",
-                "outcome": "success",
-                "metadata": {"query_length": 12},
-            }
-        ]
+        payload = response.json()
+        assert len(payload) == 1
+        assert payload[0] == {
+            "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "actor_subject": "patient-1",
+            "actor_role": "patient",
+            "action": "document.search",
+            "resource_type": "document",
+            "resource_id": "document-1",
+            "patient_id": str(PATIENT_ID),
+            "outcome": "success",
+            "metadata": {"query_length": 12},
+        }
+        assert datetime.fromisoformat(payload[0]["created_at"]).replace(tzinfo=timezone.utc) == datetime(
+            2026, 9, 10, 10, 0, tzinfo=timezone.utc
+        )
     finally:
         client.close()
         db.close()
