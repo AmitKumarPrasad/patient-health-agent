@@ -219,6 +219,11 @@ def test_admin_audit_http_route_returns_filtered_events() -> None:
         assert response.status_code == 200
         payload = response.json()
         assert len(payload) == 1
+        created_at = datetime.fromisoformat(payload[0]["created_at"])
+        assert created_at.replace(tzinfo=timezone.utc) == datetime(
+            2026, 9, 10, 10, 0, tzinfo=timezone.utc
+        )
+        payload[0].pop("created_at")
         assert payload[0] == {
             "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
             "actor_subject": "patient-1",
@@ -230,9 +235,6 @@ def test_admin_audit_http_route_returns_filtered_events() -> None:
             "outcome": "success",
             "metadata": {"query_length": 12},
         }
-        assert datetime.fromisoformat(payload[0]["created_at"]).replace(tzinfo=timezone.utc) == datetime(
-            2026, 9, 10, 10, 0, tzinfo=timezone.utc
-        )
     finally:
         client.close()
         db.close()
