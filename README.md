@@ -38,17 +38,30 @@ docs/           # Architecture and product documentation
 
 ## Current workflow
 
-The Step 12 web application provides:
+The current web application and API provide:
 
 1. Keycloak browser authentication using Authorization Code + PKCE.
 2. Patient profile loading from the authenticated Keycloak subject.
-3. Provider search by specialty.
-4. Provider availability lookup by date.
-5. Appointment booking.
-6. Appointment listing and patient cancellation.
-7. AI appointment assistant chat.
+3. Provider search by specialty and availability lookup by date.
+4. Appointment booking, listing and patient cancellation.
+5. Provider appointment and availability management.
+6. AI appointment assistant chat and assisted booking workflow.
+7. Secure patient health-record upload, search, download and deletion.
+8. Authorized provider access to patient records.
+9. Video consultation launch for eligible appointments.
+10. Scheduled appointment reminders with an admin operation to process due notifications.
+11. Admin audit-log search with filtering plus auditable notification processing.
+12. API health and database readiness endpoints for operational checks.
 
 The frontend talks only to FastAPI; it never connects directly to PostgreSQL or the AI provider.
+
+## Operational endpoints
+
+- `GET /health` — basic API liveness check.
+- `GET /health/db` — database connectivity check.
+- `GET /ready` — readiness check that returns HTTP 503 when the database is unavailable.
+- `GET /api/admin/audit` — admin-only audit event search.
+- `POST /api/admin/notifications/process` — admin-only processing of due notifications.
 
 ## Run locally
 
