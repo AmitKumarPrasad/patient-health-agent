@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.api.audit import admin_role_dependency, list_audit_events, router
+from app.api.audit import list_audit_events, router
 from app.auth.keycloak import get_current_user, require_roles
 from app.db.base import Base
 from app.db.session import get_db
