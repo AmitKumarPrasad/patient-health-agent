@@ -254,3 +254,43 @@ def test_admin_audit_http_route_rejects_non_admin() -> None:
         client.close()
         db.close()
         engine.dispose()
+
+
+def test_admin_audit_csv_export_respects_filters_and_headers() -> None:
+    engine, db = _build_database()
+    client = _build_admin_audit_client(
+        db, {"sub": "admin-1", "realm_access": {"roles": ["admin"]}}
+    )
+    try:
+        response = client.get(
+            "/api/admin/audit/export",
+            params={"patient_id": str(PATIENT_ID), "action": "document.search"},
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert response.headers["content-disposition"] == "attachment; filename=audit-events.csv"
+        lines = response.text.splitlines()
+        assert lines[0] == "id,created_at,action,actor_subject,actor_role,resource_type,resource_id,patient_id,outcome,metadata"
+        assert len(lines) == 2
+        assert "document.search" in lines[1]
+        assert str(PATIENT_ID) in lines[1]
+        assert "appointment.status_change" not in lines[1]
+    finally:
+        client.close()
+        db.close()
+        engine.dispose()
+
+
+def test_admin_audit_csv_export_rejects_non_admin() -> None:
+    engine, db = _build_database()
+    client = _build_admin_audit_client(
+        db, {"sub": "patient-1", "realm_access": {"roles": ["patient"]}}
+    )
+    try:
+        response = client.get("/api/admin/audit/export")
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Insufficient role"
+    finally:
+        client.close()
+        db.close()
+        engine.dispose()
