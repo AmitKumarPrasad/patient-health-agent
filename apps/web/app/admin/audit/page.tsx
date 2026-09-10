@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { API_URL } from "../../../lib/api";
 import { getKeycloak } from "../../keycloak";
 import { useAuth } from "../../providers";
 
@@ -17,13 +18,7 @@ type AuditEvent = {
   metadata: Record<string, unknown> | null;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const PAGE_SIZE = 100;
-
-function csvCell(value: unknown): string {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replaceAll('"', '""')}"`;
-}
 
 export default function AdminAuditPage() {
   const auth = useAuth();
@@ -35,8 +30,18 @@ export default function AdminAuditPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [processMessage, setProcessMessage] = useState("");
   const [error, setError] = useState("");
+
+  function buildFilterParams(): URLSearchParams {
+    const params = new URLSearchParams();
+    if (action.trim()) params.set("action", action.trim());
+    if (actor.trim()) params.set("actor_subject", actor.trim());
+    if (patientId.trim()) params.set("patient_id", patientId.trim());
+    if (outcome.trim()) params.set("outcome", outcome.trim());
+    return params;
+  }
 
   async function loadEvents(event?: FormEvent, nextOffset = offset) {
     event?.preventDefault();
@@ -46,11 +51,9 @@ export default function AdminAuditPage() {
     try {
       const keycloak = getKeycloak();
       await keycloak.updateToken(30);
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(nextOffset) });
-      if (action.trim()) params.set("action", action.trim());
-      if (actor.trim()) params.set("actor_subject", actor.trim());
-      if (patientId.trim()) params.set("patient_id", patientId.trim());
-      if (outcome.trim()) params.set("outcome", outcome.trim());
+      const params = buildFilterParams();
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(nextOffset));
       const response = await fetch(`${API_URL}/api/admin/audit?${params.toString()}`, {
         headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
       });
@@ -92,31 +95,35 @@ export default function AdminAuditPage() {
     }
   }
 
-  function exportCsv() {
-    if (events.length === 0) return;
-    const header = ["id", "created_at", "action", "actor_subject", "actor_role", "resource_type", "resource_id", "patient_id", "outcome", "metadata"];
-    const rows = events.map((event) => [
-      event.id,
-      event.created_at,
-      event.action,
-      event.actor_subject,
-      event.actor_role,
-      event.resource_type,
-      event.resource_id,
-      event.patient_id,
-      event.outcome,
-      event.metadata ? JSON.stringify(event.metadata) : "",
-    ]);
-    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `audit-events-page-${Math.floor(offset / PAGE_SIZE) + 1}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  async function exportCsv() {
+    if (!auth.authenticated || !auth.hasRole("admin")) return;
+    setExporting(true);
+    setError("");
+    try {
+      const keycloak = getKeycloak();
+      await keycloak.updateToken(30);
+      const params = buildFilterParams();
+      const response = await fetch(`${API_URL}/api/admin/audit/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail ?? `Request failed with status ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "audit-events.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to export audit events");
+    } finally {
+      setExporting(false);
+    }
   }
 
   function applyFilters(event: FormEvent) {
@@ -174,8 +181,8 @@ export default function AdminAuditPage() {
             <strong>{events.length} events</strong>
             <span className="muted">Page {Math.floor(offset / PAGE_SIZE) + 1}</span>
           </div>
-          <button className="button secondary" disabled={loading || events.length === 0} onClick={exportCsv}>
-            Export current page CSV
+          <button className="button secondary" disabled={loading || exporting} onClick={() => void exportCsv()}>
+            {exporting ? "Exporting…" : "Export filtered CSV"}
           </button>
         </div>
         <table>
