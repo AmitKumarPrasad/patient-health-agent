@@ -64,6 +64,33 @@ def _record_document_search_event(
         db.rollback()
 
 
+def _record_appointment_booking_event(
+    db,
+    *,
+    subject: str,
+    appointment: dict[str, str],
+) -> None:
+    """Audit an AI-assisted booking without making successful scheduling depend on audit availability."""
+    try:
+        record_event(
+            db,
+            actor_subject=subject,
+            actor_role="patient",
+            action="appointment.booked",
+            resource_type="appointment",
+            resource_id=appointment["id"],
+            patient_id=UUID(appointment["patient_id"]),
+            metadata={
+                "provider_id": appointment["provider_id"],
+                "starts_at": appointment["starts_at"],
+                "ends_at": appointment["ends_at"],
+                "source": "appointment_agent",
+            },
+        )
+    except Exception:
+        db.rollback()
+
+
 def _document_citations(messages: list) -> list[str]:
     """Build concise source citations from successful patient-document tool results."""
     citations: list[str] = []
@@ -130,7 +157,7 @@ def build_tools(authenticated_subject: str) -> list[StructuredTool]:
     ) -> dict[str, str]:
         with SessionLocal() as db:
             patient = require_patient_by_external_id(db, authenticated_subject)
-            return book_appointment(
+            result = book_appointment(
                 db,
                 patient.id,
                 UUID(provider_id),
@@ -138,6 +165,12 @@ def build_tools(authenticated_subject: str) -> list[StructuredTool]:
                 ends_at,
                 reason,
             )
+            _record_appointment_booking_event(
+                db,
+                subject=authenticated_subject,
+                appointment=result,
+            )
+            return result
 
     return [
         StructuredTool.from_function(
