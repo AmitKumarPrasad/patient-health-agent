@@ -10,6 +10,7 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.availability import Availability
 from app.models.patient import Patient
 from app.models.provider import Provider
+from app.services.audit import record_event
 
 
 def search_providers(db: Session, specialty: str) -> list[dict[str, str]]:
@@ -75,6 +76,10 @@ def book_appointment(
     starts_at: datetime,
     ends_at: datetime,
     reason: str | None = None,
+    *,
+    audit_subject: str | None = None,
+    audit_role: str = "patient",
+    audit_source: str = "rest_api",
 ) -> dict[str, str]:
     if starts_at.tzinfo is None or ends_at.tzinfo is None:
         raise ValueError("Appointment times must include a timezone")
@@ -129,7 +134,7 @@ def book_appointment(
     db.commit()
     db.refresh(appointment)
 
-    return {
+    result = {
         "id": str(appointment.id),
         "patient_id": str(appointment.patient_id),
         "provider_id": str(appointment.provider_id),
@@ -137,3 +142,24 @@ def book_appointment(
         "ends_at": appointment.ends_at.isoformat(),
         "status": appointment.status,
     }
+    if audit_subject is not None:
+        try:
+            record_event(
+                db,
+                actor_subject=audit_subject,
+                actor_role=audit_role,
+                action="appointment.booked",
+                resource_type="appointment",
+                resource_id=result["id"],
+                patient_id=patient_id,
+                metadata={
+                    "provider_id": result["provider_id"],
+                    "starts_at": result["starts_at"],
+                    "ends_at": result["ends_at"],
+                    "source": audit_source,
+                },
+            )
+        except Exception:
+            db.rollback()
+
+    return result
