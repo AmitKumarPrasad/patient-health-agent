@@ -55,7 +55,7 @@ export type PatientDocument = {
 export type RecordSearchResponse = { documents: PatientDocument[] };
 export type ProviderRecordResponse = { document: PatientDocument; content: string | null };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const keycloak = getKeycloak();
@@ -78,108 +78,3 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   return response.json() as Promise<T>;
 }
-
-export const api = {
-  me: () => request<Patient>("/api/me"),
-  providerMe: () => request<Provider>("/api/me/provider"),
-  providers: (specialty?: string) =>
-    request<Provider[]>(
-      `/api/providers${specialty ? `?specialty=${encodeURIComponent(specialty)}` : ""}`,
-    ),
-  availability: (providerId: string, date: string) =>
-    request<Availability[]>(
-      `/api/providers/${providerId}/availability?requested_date=${encodeURIComponent(date)}`,
-    ),
-  appointments: () => request<Appointment[]>("/api/appointments"),
-  book: (input: {
-    provider_id: string;
-    starts_at: string;
-    ends_at: string;
-    reason?: string;
-  }) =>
-    request<Appointment>("/api/appointments", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  updateStatus: (id: string, nextStatus: string) =>
-    request<{ id: string; status: string }>(`/api/appointments/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: nextStatus }),
-    }),
-  consultation: (id: string) =>
-    request<ConsultationResponse>(`/api/appointments/${id}/consultation`),
-  createProviderAvailability: (input: {
-    available_date: string;
-    start_time: string;
-    end_time: string;
-  }) =>
-    request<Availability>("/api/providers/me/availability", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  providerRecords: (patientId: string) =>
-    request<PatientDocument[]>(`/api/provider/patients/${patientId}/records`),
-  providerRecord: (patientId: string, documentId: string) =>
-    request<ProviderRecordResponse>(`/api/provider/patients/${patientId}/records/${documentId}`),
-  chat: (message: string) =>
-    request<AgentResponse>("/api/agent/chat", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-  recordAssistant: (message: string) =>
-    request<AgentResponse>("/api/records/assistant", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-  searchRecords: (query = "") =>
-    request<RecordSearchResponse>(
-      `/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`,
-    ),
-  documents: () => request<PatientDocument[]>("/api/documents"),
-  uploadDocument: async (file: File, category?: string, description?: string) => {
-    const keycloak = getKeycloak();
-    await keycloak.updateToken(30);
-    const form = new FormData();
-    form.append("file", file);
-    if (category?.trim()) form.append("category", category.trim());
-    if (description?.trim()) form.append("description", description.trim());
-
-    const response = await fetch(`${API_URL}/api/documents`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
-      body: form,
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      const detail = body?.detail ?? `Request failed with status ${response.status}`;
-      throw new Error(typeof detail === "string" ? detail : "Upload failed");
-    }
-    return response.json() as Promise<PatientDocument>;
-  },
-  downloadDocument: async (id: string) => {
-    const keycloak = getKeycloak();
-    await keycloak.updateToken(30);
-    const response = await fetch(`${API_URL}/api/documents/${id}`, {
-      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      const detail = body?.detail ?? `Request failed with status ${response.status}`;
-      throw new Error(typeof detail === "string" ? detail : "Download failed");
-    }
-    return response.blob();
-  },
-  deleteDocument: async (id: string) => {
-    const keycloak = getKeycloak();
-    await keycloak.updateToken(30);
-    const response = await fetch(`${API_URL}/api/documents/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      const detail = body?.detail ?? `Request failed with status ${response.status}`;
-      throw new Error(typeof detail === "string" ? detail : "Delete failed");
-    }
-  },
-};
