@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.observability import prometheus_response
 
 router = APIRouter(tags=["health"])
 
@@ -30,3 +31,9 @@ def readiness(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
             content={"status": "not_ready", "database": "unreachable"},
         )
     return {"status": "ready"}
+
+
+@router.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    payload, content_type = prometheus_response()
+    return Response(content=payload, media_type=content_type.split(";", 1)[0])
