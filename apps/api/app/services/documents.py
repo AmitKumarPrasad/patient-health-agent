@@ -237,7 +237,7 @@ def _index_document(db: Session, document: PatientDocument, content: bytes) -> i
     document.ingestion_error = None
     db.commit()
     try:
-        indexed_chunks = index_document(db, document, content)
+        indexed_chunks = index_document(db, document, content) or 0
     except Exception as exc:  # noqa: BLE001 - persist a user-visible indexing state.
         db.rollback()
         failed = db.scalar(select(PatientDocument).where(PatientDocument.id == document.id))
