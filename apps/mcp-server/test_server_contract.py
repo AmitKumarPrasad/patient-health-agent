@@ -62,5 +62,5 @@ def test_mcp_tools_delegate_to_application_services() -> None:
     )
     assert "search_patient_documents(query, subject)" in source
     assert "book_appointment(" in source
-    assert 'action="record.search"' in source
-    assert 'action="appointment.booked"' in source
+    assert 'action="record.search"' in source or "action='record.search'" in source
+    assert 'action="appointment.booked"' in source or "action='appointment.booked'" in source
