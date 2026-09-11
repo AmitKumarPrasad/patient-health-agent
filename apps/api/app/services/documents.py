@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import zlib
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -25,6 +26,7 @@ ALLOWED_CONTENT_TYPES = {
     "text/plain",
 }
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_INGESTION_ERROR_LENGTH = 1000
 
 
 def _safe_filename(filename: str) -> str:
@@ -205,6 +207,7 @@ def upload_document(
         sha256=sha256,
         category=category,
         description=description,
+        ingestion_status="pending",
     )
     client.put_object(
         settings.minio_bucket,
@@ -225,11 +228,57 @@ def upload_document(
         raise
     db.refresh(document)
 
-    try:
-        index_document(db, document, content)
-    except Exception:  # noqa: BLE001 - upload remains available if AI indexing is unavailable.
-        db.rollback()
+    _index_document(db, document, content)
     return document
+
+
+def _index_document(db: Session, document: PatientDocument, content: bytes) -> int:
+    document.ingestion_status = "processing"
+    document.ingestion_error = None
+    db.commit()
+    try:
+        indexed_chunks = index_document(db, document, content)
+    except Exception as exc:  # noqa: BLE001 - persist a user-visible indexing state.
+        db.rollback()
+        failed = db.scalar(select(PatientDocument).where(PatientDocument.id == document.id))
+        if failed is not None:
+            failed.ingestion_status = "failed"
+            failed.indexed_at = None
+            failed.indexed_chunks = 0
+            failed.ingestion_error = str(exc)[:MAX_INGESTION_ERROR_LENGTH]
+            db.commit()
+        document.ingestion_status = "failed"
+        document.indexed_at = None
+        document.indexed_chunks = 0
+        document.ingestion_error = str(exc)[:MAX_INGESTION_ERROR_LENGTH]
+        return 0
+
+    document.ingestion_status = "ready"
+    document.indexed_at = datetime.now(timezone.utc)
+    document.indexed_chunks = indexed_chunks
+    document.ingestion_error = None
+    db.commit()
+    db.refresh(document)
+    return indexed_chunks
+
+
+def reindex_document(db: Session, patient: Patient, document_id: UUID) -> PatientDocument:
+    document = get_document(db, patient, document_id)
+    client = get_storage_client()
+    try:
+        response = client.get_object(settings.minio_bucket, document.object_key)
+        try:
+            content = response.read()
+        finally:
+            response.close()
+            response.release_conn()
+    except Exception as exc:  # noqa: BLE001 - normalize storage errors at service boundary.
+        raise RuntimeError("Unable to read document for reindexing") from exc
+
+    if document.sha256 is not None and hashlib.sha256(content).hexdigest() != document.sha256:
+        raise RuntimeError("Stored document integrity check failed")
+    _index_document(db, document, content)
+    return db.scalar(select(PatientDocument).where(PatientDocument.id == document.id)) or document
 
 
 def get_document(db: Session, patient: Patient, document_id: UUID) -> PatientDocument:
