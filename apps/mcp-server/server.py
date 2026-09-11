@@ -5,6 +5,7 @@ import sys
 from datetime import date, datetime
 from uuid import UUID
 
+from mcp.server.dependencies import get_http_headers
 from mcp.server.fastmcp import FastMCP
 
 sys.path.append(os.path.abspath("../api"))
@@ -16,6 +17,14 @@ from app.services.record_tools import search_patient_documents
 
 
 mcp = FastMCP("patient-health-agent", stateless_http=True, json_response=True)
+
+
+def _authenticated_subject() -> str:
+    """Read the patient identity injected by the authenticated API gateway."""
+    subject = get_http_headers().get("x-patient-subject", "").strip()
+    if not subject:
+        raise PermissionError("Authenticated patient context is required")
+    return subject
 
 
 @mcp.tool()
@@ -33,19 +42,13 @@ def available_slots(provider_id: str, requested_date: str) -> list[dict]:
 
 
 @mcp.tool()
-def patient_records(subject: str, query: str = "") -> list[dict]:
-    """Search record metadata for an authenticated patient subject.
-
-    The MCP server is intended to run inside the trusted application network. The caller
-    must pass the Keycloak subject obtained by the authenticated API gateway; this server
-    never accepts a patient database ID for authorization decisions.
-    """
-    return search_patient_documents(query, subject)
+def patient_records(query: str = "") -> list[dict]:
+    """Search record metadata for the authenticated patient."""
+    return search_patient_documents(query, _authenticated_subject())
 
 
 @mcp.tool()
 def book_slot(
-    subject: str,
     provider_id: str,
     starts_at: str,
     ends_at: str,
@@ -53,6 +56,7 @@ def book_slot(
 ) -> dict:
     """Book an appointment for the authenticated patient through the validated service layer."""
     with SessionLocal() as db:
+        subject = _authenticated_subject()
         patient = require_patient_by_external_id(db, subject)
         return book_appointment(
             db,
@@ -67,7 +71,11 @@ def book_slot(
 if __name__ == "__main__":
     transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
     if transport == "streamable-http":
-        mcp.run(transport="streamable-http")
+        mcp.run(
+            transport="streamable-http",
+            host=os.getenv("MCP_HOST", "0.0.0.0"),
+            port=int(os.getenv("MCP_PORT", "8000")),
+        )
     elif transport == "stdio":
         mcp.run(transport="stdio")
     else:
