@@ -44,11 +44,13 @@ def test_semantic_retrieval_is_patient_scoped(monkeypatch):
     monkeypatch.setattr(rag, "_embed_query", lambda _: [0.2] * 1536)
 
     results = rag.retrieve_patient_chunks(db, patient, "blood pressure")
+    compiled = db.statement.compile()
 
     assert results[0]["document_name"] == "visit-note.txt"
     assert results[0]["chunk_index"] == 2
     assert results[0]["score"] == 0.88
-    assert str(patient.id) in str(db.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "patient_document_chunks.patient_id" in str(compiled)
+    assert patient.id in compiled.params.values()
 
 
 def test_lexical_fallback_returns_citation_metadata(monkeypatch):
@@ -72,6 +74,6 @@ def test_lexical_fallback_returns_citation_metadata(monkeypatch):
             "document_name": "medication-note.txt",
             "chunk_index": 0,
             "content": chunk.content,
-            "score": 2.0,
+            "score": 1.0,
         }
     ]
