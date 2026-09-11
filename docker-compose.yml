@@ -21,8 +21,11 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: ${KC_HEALTH_ENABLED:-true}
+      KC_METRICS_ENABLED: ${KC_METRICS_ENABLED:-true}
     ports:
       - "8080:8080"
+      - "9000:9000"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import
 
