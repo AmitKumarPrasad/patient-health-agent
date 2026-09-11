@@ -28,7 +28,7 @@ services:
       - "8080:8080"
       - "9002:9002"
     volumes:
-      - ./infra/keycloak:/opt/keycloak/data/import
+      - ./infrastructure/keycloak:/opt/keycloak/data/import
 
   api:
     build:
