@@ -17,10 +17,24 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    op.drop_column("patient_document_chunks", "embedding")
     op.add_column(
         "patient_document_chunks",
-        sa.Column("embedding", VECTOR(1536), nullable=True),
+        sa.Column("embedding_vector", VECTOR(1536), nullable=True),
+    )
+    op.execute(
+        """
+        UPDATE patient_document_chunks
+        SET embedding_vector = embedding::text::vector
+        WHERE embedding IS NOT NULL
+          AND jsonb_typeof(embedding::jsonb) = 'array'
+          AND jsonb_array_length(embedding::jsonb) = 1536
+        """
+    )
+    op.drop_column("patient_document_chunks", "embedding")
+    op.alter_column(
+        "patient_document_chunks",
+        "embedding_vector",
+        new_column_name="embedding",
     )
     op.create_index(
         "ix_patient_document_chunks_embedding_hnsw",
@@ -38,8 +52,20 @@ def downgrade() -> None:
         "ix_patient_document_chunks_embedding_hnsw",
         table_name="patient_document_chunks",
     )
-    op.drop_column("patient_document_chunks", "embedding")
     op.add_column(
         "patient_document_chunks",
-        sa.Column("embedding", sa.JSON(), nullable=True),
+        sa.Column("embedding_json", sa.JSON(), nullable=True),
+    )
+    op.execute(
+        """
+        UPDATE patient_document_chunks
+        SET embedding_json = embedding::text::json
+        WHERE embedding IS NOT NULL
+        """
+    )
+    op.drop_column("patient_document_chunks", "embedding")
+    op.alter_column(
+        "patient_document_chunks",
+        "embedding_json",
+        new_column_name="embedding",
     )
