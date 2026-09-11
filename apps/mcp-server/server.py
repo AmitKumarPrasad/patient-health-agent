@@ -12,6 +12,7 @@ sys.path.append(os.path.abspath("../api"))
 
 from app.db.session import SessionLocal
 from app.services.appointment_tools import book_appointment, get_available_slots, search_providers
+from app.services.audit import record_event
 from app.services.patient_identity import require_patient_by_external_id
 from app.services.record_tools import search_patient_documents
 
@@ -25,6 +26,22 @@ def _authenticated_subject() -> str:
     if not subject:
         raise PermissionError("Authenticated patient context is required")
     return subject
+
+
+def _audit_patient_event(db, *, subject: str, action: str, resource_type: str, patient_id, resource_id=None, metadata=None) -> None:
+    try:
+        record_event(
+            db,
+            actor_subject=subject,
+            actor_role="patient",
+            action=action,
+            resource_type=resource_type,
+            resource_id=str(resource_id) if resource_id else None,
+            patient_id=patient_id,
+            metadata=metadata or {},
+        )
+    except Exception:
+        db.rollback()
 
 
 @mcp.tool()
@@ -44,7 +61,30 @@ def available_slots(provider_id: str, requested_date: str) -> list[dict]:
 @mcp.tool()
 def patient_records(query: str = "") -> list[dict]:
     """Search record metadata for the authenticated patient."""
-    return search_patient_documents(query, _authenticated_subject())
+    subject = _authenticated_subject()
+    with SessionLocal() as db:
+        patient = require_patient_by_external_id(db, subject)
+        try:
+            results = search_patient_documents(query, subject)
+        except Exception:
+            _audit_patient_event(
+                db,
+                subject=subject,
+                action="record.search",
+                resource_type="patient_document",
+                patient_id=patient.id,
+                metadata={"result_count": 0, "outcome": "failure"},
+            )
+            raise
+        _audit_patient_event(
+            db,
+            subject=subject,
+            action="record.search",
+            resource_type="patient_document",
+            patient_id=patient.id,
+            metadata={"result_count": len(results)},
+        )
+        return results
 
 
 @mcp.tool()
@@ -55,10 +95,10 @@ def book_slot(
     reason: str = "",
 ) -> dict:
     """Book an appointment for the authenticated patient through the validated service layer."""
+    subject = _authenticated_subject()
     with SessionLocal() as db:
-        subject = _authenticated_subject()
         patient = require_patient_by_external_id(db, subject)
-        return book_appointment(
+        result = book_appointment(
             db,
             patient_id=patient.id,
             provider_id=UUID(provider_id),
@@ -66,6 +106,21 @@ def book_slot(
             ends_at=datetime.fromisoformat(ends_at),
             reason=reason or None,
         )
+        _audit_patient_event(
+            db,
+            subject=subject,
+            action="appointment.booked",
+            resource_type="appointment",
+            resource_id=result["id"],
+            patient_id=patient.id,
+            metadata={
+                "provider_id": result["provider_id"],
+                "starts_at": result["starts_at"],
+                "ends_at": result["ends_at"],
+                "source": "mcp",
+            },
+        )
+        return result
 
 
 if __name__ == "__main__":
