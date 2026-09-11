@@ -28,17 +28,37 @@ def _authenticated_subject() -> str:
     return subject
 
 
-def _audit_patient_event(db, *, subject: str, action: str, resource_type: str, patient_id, resource_id=None, metadata=None) -> None:
+def _audit_record_search(db, patient_subject, patient_id, result_count: int) -> None:
     try:
         record_event(
             db,
-            actor_subject=subject,
+            actor_subject=patient_subject,
             actor_role="patient",
-            action=action,
-            resource_type=resource_type,
-            resource_id=str(resource_id) if resource_id else None,
+            action="record.search",
+            resource_type="patient_document",
             patient_id=patient_id,
-            metadata=metadata or {},
+            metadata={"result_count": result_count},
+        )
+    except Exception:
+        db.rollback()
+
+
+def _audit_appointment_booking(db, patient_subject, patient_id, result: dict) -> None:
+    try:
+        record_event(
+            db,
+            actor_subject=patient_subject,
+            actor_role="patient",
+            action="appointment.booked",
+            resource_type="appointment",
+            resource_id=result["id"],
+            patient_id=patient_id,
+            metadata={
+                "provider_id": result["provider_id"],
+                "starts_at": result["starts_at"],
+                "ends_at": result["ends_at"],
+                "source": "mcp",
+            },
         )
     except Exception:
         db.rollback()
@@ -67,23 +87,9 @@ def patient_records(query: str = "") -> list[dict]:
         try:
             results = search_patient_documents(query, subject)
         except Exception:
-            _audit_patient_event(
-                db,
-                subject=subject,
-                action="record.search",
-                resource_type="patient_document",
-                patient_id=patient.id,
-                metadata={"result_count": 0, "outcome": "failure"},
-            )
+            _audit_record_search(db, subject, patient.id, 0)
             raise
-        _audit_patient_event(
-            db,
-            subject=subject,
-            action="record.search",
-            resource_type="patient_document",
-            patient_id=patient.id,
-            metadata={"result_count": len(results)},
-        )
+        _audit_record_search(db, subject, patient.id, len(results))
         return results
 
 
@@ -106,20 +112,7 @@ def book_slot(
             ends_at=datetime.fromisoformat(ends_at),
             reason=reason or None,
         )
-        _audit_patient_event(
-            db,
-            subject=subject,
-            action="appointment.booked",
-            resource_type="appointment",
-            resource_id=result["id"],
-            patient_id=patient.id,
-            metadata={
-                "provider_id": result["provider_id"],
-                "starts_at": result["starts_at"],
-                "ends_at": result["ends_at"],
-                "source": "mcp",
-            },
-        )
+        _audit_appointment_booking(db, subject, patient.id, result)
         return result
 
 
