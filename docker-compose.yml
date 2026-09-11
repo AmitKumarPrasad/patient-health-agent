@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17
+    image: pgvector/pgvector:0.8.6-pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
       POSTGRES_USER: ${POSTGRES_USER:-patient_health}
@@ -53,7 +53,7 @@ services:
       SMTP_PORT: 1025
       SMTP_FROM: ${SMTP_FROM:-no-reply@patient-health.local}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     ports:
@@ -79,7 +79,7 @@ services:
   notification-worker:
     build:
       context: ./apps/api
-    command: ["sh", "-c", "alembic upgrade head && python -m app.workers.notification_worker"]
+    command: ["python", "-m", "app.workers.notifications"]
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_NAME: ${APP_NAME:-patient-health-agent}
@@ -114,6 +114,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-patient-records}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,8 +135,19 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      keycloak:
-        condition: service_started
+
+  postgres-init:
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-patient_health}
+      POSTGRES_USER: ${POSTGRES_USER:-patient_health}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command: ["psql -h postgres -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -c 'CREATE EXTENSION IF NOT EXISTS vector;'" ]
 
   minio:
     image: minio/minio:latest
@@ -148,24 +161,6 @@ services:
     volumes:
       - minio-data:/data
 
-  clamav:
-    image: clamav/clamav-debian:stable
-    ports:
-      - "3310:3310"
-    healthcheck:
-      test: ["CMD-SHELL", "clamdscan --ping 2>/dev/null | grep -q PONG"]
-      interval: 15s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-
   mailpit:
     image: axllent/mailpit:latest
     ports:
@@ -175,4 +170,3 @@ services:
 volumes:
   postgres-data:
   minio-data:
-  ollama-data:
