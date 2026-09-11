@@ -27,6 +27,18 @@ def test_health() -> None:
     assert "Strict-Transport-Security" not in response.headers
 
 
+def test_metrics_endpoint_exposes_request_metrics() -> None:
+    response = client.get("/health")
+    request_id = response.headers["X-Request-ID"]
+    assert request_id
+
+    metrics_response = client.get("/metrics")
+
+    assert metrics_response.status_code == 200
+    assert "patient_health_http_requests_total" in metrics_response.text
+    assert "patient_health_http_request_duration_seconds" in metrics_response.text
+
+
 def test_hsts_is_added_for_production_https_requests(monkeypatch) -> None:
     monkeypatch.setattr(settings, "app_env", "production")
     middleware = SecurityHeadersMiddleware(lambda request: None)
