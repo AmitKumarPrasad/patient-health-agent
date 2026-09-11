@@ -28,8 +28,6 @@ def _tool_functions() -> set[str]:
                 and decorator.func.attr == "tool"
             ):
                 names.add(node.name)
-            elif isinstance(decorator, ast.Name) and decorator.id == "tool":
-                names.add(node.name)
     return names
 
 
@@ -40,9 +38,18 @@ def test_mcp_exposes_expected_application_tools() -> None:
 def test_mcp_server_supports_configurable_transports() -> None:
     source = SERVER_PATH.read_text(encoding="utf-8")
     assert 'os.getenv("MCP_TRANSPORT", "stdio")' in source
-    assert 'mcp.run(transport="streamable-http")' in source
+    assert 'mcp.run(\n            transport="streamable-http"' in source
     assert 'mcp.run(transport="stdio")' in source
-    assert "MCP_TRANSPORT must be 'stdio' or 'streamable-http'" in source
+    assert 'os.getenv("MCP_PORT", "8000")' in source
+
+
+def test_mcp_patient_tools_require_gateway_identity() -> None:
+    source = SERVER_PATH.read_text(encoding="utf-8")
+    assert 'get_http_headers().get("x-patient-subject", "").strip()' in source
+    assert "Authenticated patient context is required" in source
+    assert "def patient_records(query: str = \"\")" in source
+    assert "def book_slot(" in source
+    assert "subject: str" not in source
 
 
 def test_mcp_tools_delegate_to_application_services() -> None:
@@ -55,3 +62,5 @@ def test_mcp_tools_delegate_to_application_services() -> None:
     )
     assert "search_patient_documents(query, subject)" in source
     assert "book_appointment(" in source
+    assert 'action="record.search"' in source
+    assert 'action="appointment.booked"' in source
