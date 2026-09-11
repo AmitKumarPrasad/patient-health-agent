@@ -79,7 +79,7 @@ services:
   notification-worker:
     build:
       context: ./apps/api
-    command: ["python", "-m", "app.workers.notifications"]
+    command: ["sh", "-c", "alembic upgrade head && python -m app.workers.notification_worker"]
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_NAME: ${APP_NAME:-patient-health-agent}
@@ -135,19 +135,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
-
-  postgres-init:
-    image: pgvector/pgvector:0.8.6-pg17
-    restart: "no"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-patient_health}
-      POSTGRES_USER: ${POSTGRES_USER:-patient_health}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    entrypoint: ["sh", "-c"]
-    command: ["psql -h postgres -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -c 'CREATE EXTENSION IF NOT EXISTS vector;'" ]
+      keycloak:
+        condition: service_started
 
   minio:
     image: minio/minio:latest
@@ -161,6 +150,24 @@ services:
     volumes:
       - minio-data:/data
 
+  clamav:
+    image: clamav/clamav-debian:stable
+    ports:
+      - "3310:3310"
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 2>/dev/null | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
   mailpit:
     image: axllent/mailpit:latest
     ports:
@@ -170,3 +177,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  ollama-data:
