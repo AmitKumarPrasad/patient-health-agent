@@ -19,6 +19,7 @@ from app.services.documents import (
     delete_document,
     download_document,
     list_documents,
+    reindex_document,
     upload_document,
 )
 
@@ -35,6 +36,10 @@ class DocumentResponse(BaseModel):
     sha256: str | None
     category: str | None
     description: str | None
+    ingestion_status: str
+    indexed_at: str | None
+    indexed_chunks: int
+    ingestion_error: str | None
     created_at: str
 
 
@@ -54,6 +59,10 @@ def _serialize(document: PatientDocument) -> DocumentResponse:
         sha256=document.sha256,
         category=document.category,
         description=document.description,
+        ingestion_status=document.ingestion_status,
+        indexed_at=document.indexed_at.isoformat() if document.indexed_at else None,
+        indexed_chunks=document.indexed_chunks,
+        ingestion_error=document.ingestion_error,
         created_at=document.created_at.isoformat(),
     )
 
@@ -158,7 +167,60 @@ def upload_patient_document(
         metadata={
             "content_type": document.content_type,
             "size_bytes": document.size_bytes,
+            "ingestion_status": document.ingestion_status,
+            "indexed_chunks": document.indexed_chunks,
         },
+        outcome="success" if document.ingestion_status == "ready" else "partial",
+        error_message=document.ingestion_error,
+    )
+    return _serialize(document)
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentResponse)
+def reindex_patient_document(
+    document_id: UUID,
+    user: dict = Depends(require_roles(PATIENT_ROLE)),
+    db: Session = Depends(get_db),
+) -> DocumentResponse:
+    subject = patient_subject(user)
+    patient = _patient_for_subject(db, subject)
+    try:
+        document = reindex_document(db, patient, document_id)
+    except LookupError as exc:
+        _record_patient_document_event(
+            db,
+            subject=subject,
+            action="record.reindex",
+            patient=patient,
+            resource_id=str(document_id),
+            outcome="failure",
+            error_message="Document not found",
+        )
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        _record_patient_document_event(
+            db,
+            subject=subject,
+            action="record.reindex",
+            patient=patient,
+            resource_id=str(document_id),
+            outcome="failure",
+            error_message=str(exc),
+        )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    _record_patient_document_event(
+        db,
+        subject=subject,
+        action="record.reindex",
+        patient=patient,
+        document=document,
+        metadata={
+            "ingestion_status": document.ingestion_status,
+            "indexed_chunks": document.indexed_chunks,
+        },
+        outcome="success" if document.ingestion_status == "ready" else "partial",
+        error_message=document.ingestion_error,
     )
     return _serialize(document)
 
