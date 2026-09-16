@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -17,6 +17,14 @@ router = APIRouter(prefix="/api/research", tags=["research"])
 
 class ResearchRequest(BaseModel):
     message: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("Research message must contain at least 3 non-whitespace characters")
+        return value
 
 
 class ResearchSource(BaseModel):
@@ -96,7 +104,7 @@ def research(
     _: dict = Depends(require_roles("patient", "provider", "admin")),
 ) -> ResearchResponse:
     try:
-        return ResearchResponse(**invoke_research_agent(request.message.strip()))
+        return ResearchResponse(**invoke_research_agent(request.message))
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -164,7 +172,7 @@ def send_session_message(
 ) -> ResearchSessionResponse:
     owner = patient_subject(user)
     session = _owned_session(db, session_id, owner)
-    question = request.message.strip()
+    question = request.message
     history = [
         {"role": message.role, "content": message.content}
         for message in session.messages
