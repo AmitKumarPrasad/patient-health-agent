@@ -104,13 +104,7 @@ def list_patient_documents(
     subject = patient_subject(user)
     patient = _patient_for_subject(db, subject)
     documents = list_documents(db, patient)
-    _record_patient_document_event(
-        db,
-        subject=subject,
-        action="record.list",
-        patient=patient,
-        metadata={"document_count": len(documents)},
-    )
+    _record_patient_document_event(db, subject=subject, action="record.list", patient=patient, metadata={"document_count": len(documents)})
     return [_serialize(item) for item in documents]
 
 
@@ -150,6 +144,7 @@ def upload_patient_document(
             content=content,
             category=category.strip() if category else None,
             description=description.strip() if description else None,
+            async_ingestion=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -187,26 +182,10 @@ def reindex_patient_document(
     try:
         document = reindex_document(db, patient, document_id)
     except LookupError as exc:
-        _record_patient_document_event(
-            db,
-            subject=subject,
-            action="record.reindex",
-            patient=patient,
-            resource_id=str(document_id),
-            outcome="failure",
-            error_message="Document not found",
-        )
+        _record_patient_document_event(db, subject=subject, action="record.reindex", patient=patient, resource_id=str(document_id), outcome="failure", error_message="Document not found")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
-        _record_patient_document_event(
-            db,
-            subject=subject,
-            action="record.reindex",
-            patient=patient,
-            resource_id=str(document_id),
-            outcome="failure",
-            error_message=str(exc),
-        )
+        _record_patient_document_event(db, subject=subject, action="record.reindex", patient=patient, resource_id=str(document_id), outcome="failure", error_message=str(exc))
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     _record_patient_document_event(
@@ -215,10 +194,7 @@ def reindex_patient_document(
         action="record.reindex",
         patient=patient,
         document=document,
-        metadata={
-            "ingestion_status": document.ingestion_status,
-            "indexed_chunks": document.indexed_chunks,
-        },
+        metadata={"ingestion_status": document.ingestion_status, "indexed_chunks": document.indexed_chunks},
         outcome="success" if document.ingestion_status == "ready" else "partial",
         error_message=document.ingestion_error,
     )
@@ -236,39 +212,13 @@ def get_patient_document(
     try:
         document, content = download_document(db, patient, document_id)
     except LookupError as exc:
-        _record_patient_document_event(
-            db,
-            subject=subject,
-            action="record.read",
-            patient=patient,
-            resource_id=str(document_id),
-            outcome="failure",
-            error_message="Document not found",
-        )
+        _record_patient_document_event(db, subject=subject, action="record.read", patient=patient, resource_id=str(document_id), outcome="failure", error_message="Document not found")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
-        _record_patient_document_event(
-            db,
-            subject=subject,
-            action="record.read",
-            patient=patient,
-            resource_id=str(document_id),
-            outcome="failure",
-            error_message="Document retrieval failed",
-        )
+        _record_patient_document_event(db, subject=subject, action="record.read", patient=patient, resource_id=str(document_id), outcome="failure", error_message="Document retrieval failed")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    _record_patient_document_event(
-        db,
-        subject=subject,
-        action="record.read",
-        patient=patient,
-        document=document,
-        metadata={
-            "content_type": document.content_type,
-            "size_bytes": document.size_bytes,
-        },
-    )
+    _record_patient_document_event(db, subject=subject, action="record.read", patient=patient, document=document, metadata={"content_type": document.content_type, "size_bytes": document.size_bytes})
     return Response(
         content=content,
         media_type=document.content_type,
@@ -300,12 +250,5 @@ def remove_patient_document(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    _record_patient_document_event(
-        db,
-        subject=subject,
-        action="record.delete",
-        patient=patient,
-        document=document,
-        metadata={"content_type": document.content_type, "size_bytes": document.size_bytes},
-    )
+    _record_patient_document_event(db, subject=subject, action="record.delete", patient=patient, document=document, metadata={"content_type": document.content_type, "size_bytes": document.size_bytes})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
