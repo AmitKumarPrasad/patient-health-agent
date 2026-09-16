@@ -54,69 +54,139 @@ class ResearchSessionResponse(BaseModel):
 
 def _session_response(session: ResearchSession) -> ResearchSessionResponse:
     return ResearchSessionResponse(
-        id=session.id, title=session.title,
-        created_at=session.created_at.isoformat(), updated_at=session.updated_at.isoformat(),
-        messages=[ResearchMessageResponse(
-            id=message.id, role=message.role, content=message.content,
-            sources=[ResearchSource(**source) for source in (message.sources or [])],
-            created_at=message.created_at.isoformat(),
-        ) for message in session.messages],
+        id=session.id,
+        title=session.title,
+        created_at=session.created_at.isoformat(),
+        updated_at=session.updated_at.isoformat(),
+        messages=[
+            ResearchMessageResponse(
+                id=message.id,
+                role=message.role,
+                content=message.content,
+                sources=[ResearchSource(**source) for source in (message.sources or [])],
+                created_at=message.created_at.isoformat(),
+            )
+            for message in session.messages
+        ],
     )
 
 
-def _owned_session(db: Session, session_id: UUID, owner_subject: str) -> ResearchSession:
-    session = db.scalar(select(ResearchSession).options(selectinload(ResearchSession.messages)).where(
-        ResearchSession.id == session_id, ResearchSession.owner_subject == owner_subject
-    ))
+def _owned_session(
+    db: Session, session_id: UUID, owner_subject: str
+) -> ResearchSession:
+    session = db.scalar(
+        select(ResearchSession)
+        .options(selectinload(ResearchSession.messages))
+        .where(
+            ResearchSession.id == session_id,
+            ResearchSession.owner_subject == owner_subject,
+        )
+    )
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research session not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research session not found",
+        )
     return session
 
 
 @router.post("", response_model=ResearchResponse)
-def research(request: ResearchRequest, _: dict = Depends(require_roles("patient", "provider", "admin"))) -> ResearchResponse:
+def research(
+    request: ResearchRequest,
+    _: dict = Depends(require_roles("patient", "provider", "admin")),
+) -> ResearchResponse:
     try:
         return ResearchResponse(**invoke_research_agent(request.message.strip()))
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.post("/sessions", response_model=ResearchSessionResponse, status_code=status.HTTP_201_CREATED)
-def create_session(user: dict = Depends(require_roles("patient", "provider", "admin")), db: Session = Depends(get_db)) -> ResearchSessionResponse:
-    session = ResearchSession(owner_subject=patient_subject(user), title="New research session")
-    db.add(session); db.commit(); db.refresh(session)
+@router.post(
+    "/sessions",
+    response_model=ResearchSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_session(
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> ResearchSessionResponse:
+    session = ResearchSession(
+        owner_subject=patient_subject(user),
+        title="New research session",
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
     session.messages = []
     return _session_response(session)
 
 
 @router.get("/sessions", response_model=list[ResearchSessionSummary])
-def list_sessions(user: dict = Depends(require_roles("patient", "provider", "admin")), db: Session = Depends(get_db)) -> list[ResearchSessionSummary]:
-    rows = db.scalars(select(ResearchSession).where(
-        ResearchSession.owner_subject == patient_subject(user)
-    ).order_by(ResearchSession.updated_at.desc()).limit(50)).all()
-    return [ResearchSessionSummary(id=row.id, title=row.title, created_at=row.created_at.isoformat(), updated_at=row.updated_at.isoformat()) for row in rows]
+def list_sessions(
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> list[ResearchSessionSummary]:
+    rows = db.scalars(
+        select(ResearchSession)
+        .where(ResearchSession.owner_subject == patient_subject(user))
+        .order_by(ResearchSession.updated_at.desc())
+        .limit(50)
+    ).all()
+    return [
+        ResearchSessionSummary(
+            id=row.id,
+            title=row.title,
+            created_at=row.created_at.isoformat(),
+            updated_at=row.updated_at.isoformat(),
+        )
+        for row in rows
+    ]
 
 
 @router.get("/sessions/{session_id}", response_model=ResearchSessionResponse)
-def get_session(session_id: UUID, user: dict = Depends(require_roles("patient", "provider", "admin")), db: Session = Depends(get_db)) -> ResearchSessionResponse:
+def get_session(
+    session_id: UUID,
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> ResearchSessionResponse:
     return _session_response(_owned_session(db, session_id, patient_subject(user)))
 
 
-@router.post("/sessions/{session_id}/messages", response_model=ResearchSessionResponse)
-def send_session_message(session_id: UUID, request: ResearchRequest, user: dict = Depends(require_roles("patient", "provider", "admin")), db: Session = Depends(get_db)) -> ResearchSessionResponse:
+@router.post(
+    "/sessions/{session_id}/messages",
+    response_model=ResearchSessionResponse,
+)
+def send_session_message(
+    session_id: UUID,
+    request: ResearchRequest,
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> ResearchSessionResponse:
     owner = patient_subject(user)
     session = _owned_session(db, session_id, owner)
     question = request.message.strip()
-    history = [{"role": message.role, "content": message.content} for message in session.messages]
+    history = [
+        {"role": message.role, "content": message.content}
+        for message in session.messages
+    ]
+
     try:
         result = invoke_research_agent(question, history=history)
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     db.add(ResearchMessage(session=session, role="user", content=question))
-    db.add(ResearchMessage(session=session, role="assistant", content=result["response"], sources=result["sources"]))
+    db.add(
+        ResearchMessage(
+            session=session,
+            role="assistant",
+            content=result["response"],
+            sources=result["sources"],
+        )
+    )
     if session.title == "New research session":
         session.title = question[:80]
     session.updated_at = func.now()
     db.commit()
+
     return _session_response(_owned_session(db, session_id, owner))
