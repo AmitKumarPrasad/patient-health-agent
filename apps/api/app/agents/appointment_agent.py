@@ -11,6 +11,7 @@ from langgraph.prebuilt import ToolNode
 from typing_extensions import Annotated
 
 from app.agents.mcp_tools import load_authenticated_mcp_tools
+from app.services.audit import record_event
 from app.services.llm import get_llm
 
 
@@ -31,6 +32,22 @@ required information is missing. Appointment times must include an explicit time
 The authenticated patient identity is supplied by the application and is never a tool argument.
 Do not request, infer, or accept a patient ID or Keycloak subject from the user.
 """
+
+
+def _record_document_search_event(db, *, subject: str, patient_id, result_count: int) -> None:
+    """Record document-search audit events without breaking the user request if audit storage fails."""
+    try:
+        record_event(
+            db,
+            actor_subject=subject,
+            actor_role="patient",
+            action="record.search",
+            resource_type="patient_document",
+            patient_id=patient_id,
+            metadata={"result_count": result_count},
+        )
+    except Exception:
+        db.rollback()
 
 
 def _document_citations(messages: list) -> list[str]:
