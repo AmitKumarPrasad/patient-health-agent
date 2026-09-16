@@ -18,20 +18,28 @@ def test_process_pending_documents_marks_document_ready(monkeypatch) -> None:
     )
 
     class FakeDB:
-        def __init__(self) -> None:
-            self.commits = 0
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
         def scalars(self, query):
             return SimpleNamespace(all=lambda: [document])
+
         def commit(self) -> None:
-            self.commits += 1
+            pass
+
         def scalar(self, query):
             return document
 
     class FakeResponse:
         def read(self) -> bytes:
             return b"hello"
+
         def close(self) -> None:
             pass
+
         def release_conn(self) -> None:
             pass
 
@@ -63,18 +71,31 @@ def test_process_pending_documents_isolates_failure(monkeypatch) -> None:
     )
 
     class FakeDB:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
         def scalars(self, query):
             return SimpleNamespace(all=lambda: [document])
+
         def commit(self) -> None:
             pass
+
         def rollback(self) -> None:
             pass
+
         def scalar(self, query):
             return document
 
     db = FakeDB()
     monkeypatch.setattr(worker, "SessionLocal", lambda: db)
-    monkeypatch.setattr(worker, "get_storage_client", lambda: (_ for _ in ()).throw(RuntimeError("storage unavailable")))
+    monkeypatch.setattr(
+        worker,
+        "get_storage_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("storage unavailable")),
+    )
 
     assert worker.process_pending_documents() == 0
     assert document.ingestion_status == "failed"
