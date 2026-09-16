@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -41,7 +42,7 @@ def process_pending_documents(limit: int = BATCH_SIZE) -> int:
 
                 indexed_chunks = index_document(db, document, content) or 0
                 document.ingestion_status = "ready"
-                document.indexed_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+                document.indexed_at = datetime.now(timezone.utc)
                 document.indexed_chunks = indexed_chunks
                 document.ingestion_error = None
                 db.commit()
