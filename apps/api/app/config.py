@@ -65,6 +65,8 @@ class Settings(BaseSettings):
         origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
         if not origins or "*" in origins:
             errors.append("CORS_ORIGINS must contain explicit origins in production")
+        if self.rate_limit_requests <= 0:
+            errors.append("RATE_LIMIT_REQUESTS must be greater than zero in production")
         if self.rate_limit_trust_forwarded_for:
             errors.append("RATE_LIMIT_TRUST_FORWARDED_FOR must remain false unless the trusted proxy is explicitly configured")
         if errors:
