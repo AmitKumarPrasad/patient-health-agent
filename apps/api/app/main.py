@@ -21,6 +21,7 @@ from app.api.records import router as records_router
 from app.api.research import router as research_router
 from app.config import settings
 from app.middleware.access_log import AccessLogMiddleware
+from app.middleware.body_size import RequestBodySizeLimitMiddleware
 from app.middleware.rate_limit import FixedWindowRateLimitMiddleware
 from app.middleware.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
 
@@ -74,6 +75,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestBodySizeLimitMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(FixedWindowRateLimitMiddleware)
