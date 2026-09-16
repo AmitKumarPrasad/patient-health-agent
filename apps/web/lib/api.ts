@@ -40,6 +40,8 @@ export type Appointment = {
 };
 
 export type AgentResponse = { response: string };
+export type ResearchSource = { title: string; url: string };
+export type ResearchResponse = { response: string; sources: ResearchSource[] };
 export type ConsultationResponse = { appointment_id: string; join_url: string };
 
 export type PatientDocument = {
@@ -91,55 +93,30 @@ export const api = {
       `/api/providers/${providerId}/availability?requested_date=${encodeURIComponent(date)}`,
     ),
   appointments: () => request<Appointment[]>("/api/appointments"),
-  book: (input: {
-    provider_id: string;
-    starts_at: string;
-    ends_at: string;
-    reason?: string;
-  }) =>
-    request<Appointment>("/api/appointments", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+  book: (input: { provider_id: string; starts_at: string; ends_at: string; reason?: string }) =>
+    request<Appointment>("/api/appointments", { method: "POST", body: JSON.stringify(input) }),
   updateStatus: (id: string, nextStatus: string) =>
     request<{ id: string; status: string }>(`/api/appointments/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: nextStatus }),
+      method: "PATCH", body: JSON.stringify({ status: nextStatus }),
     }),
-  consultation: (id: string) =>
-    request<ConsultationResponse>(`/api/appointments/${id}/consultation`),
-  createProviderAvailability: (input: {
-    available_date: string;
-    start_time: string;
-    end_time: string;
-  }) =>
-    request<Availability>("/api/providers/me/availability", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  providerRecords: (patientId: string) =>
-    request<PatientDocument[]>(`/api/provider/patients/${patientId}/records`),
+  consultation: (id: string) => request<ConsultationResponse>(`/api/appointments/${id}/consultation`),
+  createProviderAvailability: (input: { available_date: string; start_time: string; end_time: string }) =>
+    request<Availability>("/api/providers/me/availability", { method: "POST", body: JSON.stringify(input) }),
+  providerRecords: (patientId: string) => request<PatientDocument[]>(`/api/provider/patients/${patientId}/records`),
   providerRecord: (patientId: string, documentId: string) =>
     request<ProviderRecordResponse>(`/api/provider/patients/${patientId}/records/${documentId}`),
-  chat: (message: string) =>
-    request<AgentResponse>("/api/agent/chat", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-  recordAssistant: (message: string) =>
-    request<AgentResponse>("/api/records/assistant", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-  research: (message: string) =>
-    request<AgentResponse>("/api/research", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-  searchRecords: (query = "") =>
-    request<RecordSearchResponse>(
-      `/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`,
-    ),
+  chat: (message: string) => request<AgentResponse>("/api/agent/chat", {
+    method: "POST", body: JSON.stringify({ message }),
+  }),
+  recordAssistant: (message: string) => request<AgentResponse>("/api/records/assistant", {
+    method: "POST", body: JSON.stringify({ message }),
+  }),
+  research: (message: string) => request<ResearchResponse>("/api/research", {
+    method: "POST", body: JSON.stringify({ message }),
+  }),
+  searchRecords: (query = "") => request<RecordSearchResponse>(
+    `/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+  ),
   documents: () => request<PatientDocument[]>("/api/documents"),
   uploadDocument: async (file: File, category?: string, description?: string) => {
     const keycloak = getKeycloak();
@@ -148,11 +125,8 @@ export const api = {
     form.append("file", file);
     if (category?.trim()) form.append("category", category.trim());
     if (description?.trim()) form.append("description", description.trim());
-
     const response = await fetch(`${API_URL}/api/documents`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
-      body: form,
+      method: "POST", headers: { Authorization: `Bearer ${keycloak.token ?? ""}` }, body: form,
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
@@ -178,8 +152,7 @@ export const api = {
     const keycloak = getKeycloak();
     await keycloak.updateToken(30);
     const response = await fetch(`${API_URL}/api/documents/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+      method: "DELETE", headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
