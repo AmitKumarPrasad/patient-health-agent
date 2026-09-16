@@ -39,7 +39,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
-      POSTGRES_USER: ${POSTGRES_USER:-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-patient_health}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-patient-health}
@@ -86,7 +86,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
-      POSTGRES_USER: ${POSTGRES_USER:-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-patient_health}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
@@ -108,7 +108,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-patient_health}
-      POSTGRES_USER: ${POSTGRES_USER:-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-patient_health}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
