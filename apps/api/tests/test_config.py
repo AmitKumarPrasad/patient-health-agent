@@ -29,3 +29,44 @@ def test_rate_limiting_can_be_disabled_with_zero_request_limit() -> None:
     settings = Settings(rate_limit_requests=0)
 
     assert settings.rate_limit_requests == 0
+
+
+def _production_settings(**overrides):
+    values = {
+        "app_env": "production",
+        "postgres_password": "strong-production-password",
+        "minio_access_key": "production-access",
+        "minio_secret_key": "strong-production-secret",
+        "minio_secure": True,
+        "keycloak_issuer_url": "https://identity.example.com/realms/patient-health",
+        "keycloak_jwks_url": "https://identity.example.com/realms/patient-health/protocol/openid-connect/certs",
+        "cors_origins": "https://app.example.com",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_production_security_configuration_is_accepted() -> None:
+    settings = _production_settings()
+
+    assert settings.app_env == "production"
+    assert settings.minio_secure is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("postgres_password", "patient_health"),
+        ("minio_access_key", "minioadmin"),
+        ("minio_secret_key", "minioadmin"),
+        ("minio_secure", False),
+        ("keycloak_issuer_url", "http://identity.example.com/realms/patient-health"),
+        ("keycloak_jwks_url", "http://identity.example.com/realms/patient-health/protocol/openid-connect/certs"),
+        ("cors_origins", "*"),
+        ("cors_origins", ""),
+        ("rate_limit_trust_forwarded_for", True),
+    ],
+)
+def test_production_insecure_configuration_is_rejected(field: str, value) -> None:
+    with pytest.raises(ValidationError):
+        _production_settings(**{field: value})
