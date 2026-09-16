@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.agents.appointment_agent import invoke_appointment_agent
@@ -17,12 +17,14 @@ class AgentResponse(BaseModel):
 
 @router.post("/chat", response_model=AgentResponse)
 def chat(
-    request: AgentRequest,
+    payload: AgentRequest,
+    request: Request,
     user: dict = Depends(get_current_user),
 ) -> AgentResponse:
     subject = patient_subject(user)
+    request_id = getattr(request.state, "request_id", None)
     try:
-        response = invoke_appointment_agent(request.message, subject)
+        response = invoke_appointment_agent(payload.message, subject, request_id)
     except LookupError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (RuntimeError, ValueError) as exc:
