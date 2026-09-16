@@ -24,6 +24,9 @@ class PatientDocument(Base):
     ingestion_status: Mapped[str] = mapped_column(
         String(20), default="pending", server_default="pending", index=True
     )
+    ingestion_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     indexed_chunks: Mapped[int] = mapped_column(default=0, server_default="0")
     ingestion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
