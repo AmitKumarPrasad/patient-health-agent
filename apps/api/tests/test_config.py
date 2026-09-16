@@ -51,6 +51,7 @@ def test_production_security_configuration_is_accepted() -> None:
 
     assert settings.app_env == "production"
     assert settings.minio_secure is True
+    assert settings.rate_limit_requests == 120
 
 
 @pytest.mark.parametrize(
@@ -64,6 +65,7 @@ def test_production_security_configuration_is_accepted() -> None:
         ("keycloak_jwks_url", "http://identity.example.com/realms/patient-health/protocol/openid-connect/certs"),
         ("cors_origins", "*"),
         ("cors_origins", ""),
+        ("rate_limit_requests", 0),
         ("rate_limit_trust_forwarded_for", True),
     ],
 )
