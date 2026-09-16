@@ -6,6 +6,7 @@ from app.models.document_chunk import PatientDocumentChunk
 from app.models.notification import Notification
 from app.models.patient import Patient
 from app.models.provider import Provider
+from app.models.research import ResearchMessage, ResearchSession
 
 __all__ = [
     "Appointment",
@@ -17,4 +18,6 @@ __all__ = [
     "Notification",
     "Patient",
     "Provider",
+    "ResearchMessage",
+    "ResearchSession",
 ]
