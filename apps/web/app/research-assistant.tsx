@@ -1,11 +1,30 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { api } from "../lib/api";
+import { api, ResearchSource } from "../lib/api";
+
+function SourceList({ sources }: { sources: ResearchSource[] }) {
+  if (!sources.length) return null;
+  return (
+    <div style={{ marginTop: 18 }}>
+      <h3>Sources</h3>
+      <ol>
+        {sources.map((source) => (
+          <li key={source.url} style={{ marginBottom: 8 }}>
+            <a href={source.url} target="_blank" rel="noreferrer">
+              {source.title}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 export default function ResearchAssistant() {
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState("");
+  const [sources, setSources] = useState<ResearchSource[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,9 +38,11 @@ export default function ResearchAssistant() {
     try {
       const result = await api.research(question);
       setAnswer(result.response);
+      setSources(result.sources);
       setMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Research request failed");
+      setSources([]);
     } finally {
       setLoading(false);
     }
@@ -48,8 +69,9 @@ export default function ResearchAssistant() {
       </form>
       {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
       {answer && (
-        <div className="chat-answer" style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>
-          {answer}
+        <div className="chat-answer" style={{ marginTop: 12 }}>
+          <div style={{ whiteSpace: "pre-wrap" }}>{answer}</div>
+          <SourceList sources={sources} />
         </div>
       )}
     </section>
