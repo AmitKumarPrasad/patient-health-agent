@@ -131,6 +131,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  research: (message: string) =>
+    request<AgentResponse>("/api/research", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
   searchRecords: (query = "") =>
     request<RecordSearchResponse>(
       `/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`,
