@@ -182,6 +182,7 @@ def upload_document(
     content: bytes,
     category: str | None,
     description: str | None,
+    async_ingestion: bool = False,
 ) -> PatientDocument:
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise ValueError("Unsupported document type")
@@ -228,7 +229,8 @@ def upload_document(
         raise
     db.refresh(document)
 
-    _index_document(db, document, content)
+    if not async_ingestion:
+        _index_document(db, document, content)
     return document
 
 
@@ -247,10 +249,6 @@ def _index_document(db: Session, document: PatientDocument, content: bytes) -> i
             failed.indexed_chunks = 0
             failed.ingestion_error = str(exc)[:MAX_INGESTION_ERROR_LENGTH]
             db.commit()
-        document.ingestion_status = "failed"
-        document.indexed_at = None
-        document.indexed_chunks = 0
-        document.ingestion_error = str(exc)[:MAX_INGESTION_ERROR_LENGTH]
         return 0
 
     document.ingestion_status = "ready"
