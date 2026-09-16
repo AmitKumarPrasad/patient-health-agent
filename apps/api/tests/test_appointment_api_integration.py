@@ -17,7 +17,7 @@ PATIENT_SUBJECT = "integration-patient-subject"
 PROVIDER_SUBJECT = "integration-provider-subject"
 PROVIDER_ID = UUID("22222222-2222-2222-2222-222222222222")
 PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
-APPOINTMENT_DATE = date(2026, 9, 12)
+APPOINTMENT_DATE = date(2026, 10, 12)
 
 
 def _build_database() -> tuple[object, Session]:
@@ -43,15 +43,18 @@ def _build_database() -> tuple[object, Session]:
                 external_id=PATIENT_SUBJECT,
                 first_name="Demo",
                 last_name="Patient",
-                email="demo.patient@example.test",
+                email="patient@example.com",
+                phone="+10000000000",
             ),
             Provider(
                 id=PROVIDER_ID,
                 external_id=PROVIDER_SUBJECT,
                 first_name="Demo",
                 last_name="Provider",
-                specialty="Dermatology",
-                email="demo.provider@example.test",
+                specialty="dermatology",
+                email="provider@example.com",
+                phone="+10000000001",
+                bio="Demo provider",
             ),
             Availability(
                 provider_id=PROVIDER_ID,
@@ -66,10 +69,10 @@ def _build_database() -> tuple[object, Session]:
     return engine, db
 
 
-def _set_user(subject: str, *roles: str) -> None:
+def _set_user(subject: str, role: str) -> None:
     app.dependency_overrides[get_current_user] = lambda: {
         "sub": subject,
-        "realm_access": {"roles": list(roles)},
+        "realm_access": {"roles": [role]},
     }
 
 
@@ -144,7 +147,7 @@ def test_patient_appointment_api_flow() -> None:
 
             notifications = db.query(Notification).all()
             assert len(notifications) == 2
-            assert {item.status for item in notifications} == {"failed"}
+            assert all(item.status.value == "failed" for item in notifications)
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
@@ -193,7 +196,7 @@ def test_provider_can_confirm_and_complete_patient_appointment() -> None:
 
             notifications = db.query(Notification).all()
             assert len(notifications) == 2
-            assert {item.status for item in notifications} == {"failed"}
+            assert all(item.status.value == "failed" for item in notifications)
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
