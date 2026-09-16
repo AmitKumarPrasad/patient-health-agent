@@ -32,6 +32,14 @@ class PHISafeLogFilter(logging.Filter):
         return True
 
 
+def install_phi_safe_logging() -> None:
+    """Install the redaction filter on the process root logger handlers."""
+    root = logging.getLogger()
+    for handler in root.handlers:
+        if not any(isinstance(item, PHISafeLogFilter) for item in handler.filters):
+            handler.addFilter(PHISafeLogFilter())
+
+
 def safe_log_exception(logger: logging.Logger, event: str, exc: BaseException, **context: Any) -> None:
     """Log an error event without exception text, traceback, request data, or PHI."""
     fields = {"event": event, "exception_type": type(exc).__name__}
