@@ -10,10 +10,12 @@ from sqlalchemy import or_, select
 from app.config import settings
 from app.db.session import SessionLocal
 from app.models.document import PatientDocument
-from app.services.documents import get_storage_client
+from app.observability.safe_logging import PHISafeLogFilter, safe_log_exception
 from app.services.document_ingestion import index_document
+from app.services.documents import get_storage_client
 
 logger = logging.getLogger(__name__)
+logger.addFilter(PHISafeLogFilter())
 POLL_SECONDS = 10
 BATCH_SIZE = 5
 MAX_ERROR_LENGTH = 1000
@@ -76,7 +78,7 @@ def process_pending_documents(limit: int = BATCH_SIZE) -> int:
                 db.commit()
                 processed += 1
             except Exception as exc:  # noqa: BLE001 - isolate failures per document.
-                logger.exception("document ingestion failed document_id=%s", document.id)
+                safe_log_exception(logger, "document_ingestion_failed", exc, document_id=document.id)
                 db.rollback()
                 failed = db.scalar(select(PatientDocument).where(PatientDocument.id == document.id))
                 if failed is not None:
@@ -101,8 +103,8 @@ def run() -> None:
             processed = process_pending_documents()
             if processed:
                 logger.info("processed %s document(s)", processed)
-        except Exception:
-            logger.exception("document ingestion polling failed")
+        except Exception as exc:  # noqa: BLE001 - keep polling after transient failures.
+            safe_log_exception(logger, "document_ingestion_polling_failed", exc)
         time.sleep(POLL_SECONDS)
 
 
