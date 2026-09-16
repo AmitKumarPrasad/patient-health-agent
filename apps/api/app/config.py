@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=120, ge=0)
     rate_limit_window_seconds: int = Field(default=60, gt=0)
     rate_limit_trust_forwarded_for: bool = False
+    max_request_body_bytes: int = Field(default=12 * 1024 * 1024, gt=0)
 
     smtp_host: str = "localhost"
     smtp_port: int = 1025
