@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import settings
 from app.db.session import SessionLocal
@@ -16,19 +17,41 @@ logger = logging.getLogger(__name__)
 POLL_SECONDS = 10
 BATCH_SIZE = 5
 MAX_ERROR_LENGTH = 1000
+MAX_ATTEMPTS = 5
+PROCESSING_TIMEOUT = timedelta(minutes=15)
+
+
+def _backoff(attempt: int) -> timedelta:
+    return timedelta(seconds=min(900, 30 * (2 ** max(0, attempt - 1))))
 
 
 def process_pending_documents(limit: int = BATCH_SIZE) -> int:
     processed = 0
+    now = datetime.now(timezone.utc)
     with SessionLocal() as db:
-        documents = db.scalars(
+        stale_before = now - PROCESSING_TIMEOUT
+        candidates = db.scalars(
             select(PatientDocument)
-            .where(PatientDocument.ingestion_status == "pending")
+            .where(
+                or_(
+                    (PatientDocument.ingestion_status == "pending")
+                    & (or_(PatientDocument.next_attempt_at.is_(None), PatientDocument.next_attempt_at <= now)),
+                    (PatientDocument.ingestion_status == "failed")
+                    & (PatientDocument.ingestion_attempts < MAX_ATTEMPTS)
+                    & (or_(PatientDocument.next_attempt_at.is_(None), PatientDocument.next_attempt_at <= now)),
+                    (PatientDocument.ingestion_status == "processing")
+                    & (PatientDocument.processing_started_at < stale_before),
+                )
+            )
             .order_by(PatientDocument.created_at)
+            .with_for_update(skip_locked=True)
             .limit(limit)
         ).all()
-        for document in documents:
+
+        for document in candidates:
             document.ingestion_status = "processing"
+            document.processing_started_at = now
+            document.ingestion_attempts += 1
             document.ingestion_error = None
             db.commit()
             try:
@@ -40,22 +63,33 @@ def process_pending_documents(limit: int = BATCH_SIZE) -> int:
                     response.close()
                     response.release_conn()
 
+                if document.sha256 and hashlib.sha256(content).hexdigest() != document.sha256:
+                    raise ValueError("Document integrity check failed")
+
                 indexed_chunks = index_document(db, document, content) or 0
                 document.ingestion_status = "ready"
                 document.indexed_at = datetime.now(timezone.utc)
                 document.indexed_chunks = indexed_chunks
                 document.ingestion_error = None
+                document.next_attempt_at = None
+                document.processing_started_at = None
                 db.commit()
                 processed += 1
-            except Exception as exc:  # noqa: BLE001 - worker must isolate failures per document.
+            except Exception as exc:  # noqa: BLE001 - isolate failures per document.
                 logger.exception("document ingestion failed document_id=%s", document.id)
                 db.rollback()
                 failed = db.scalar(select(PatientDocument).where(PatientDocument.id == document.id))
                 if failed is not None:
-                    failed.ingestion_status = "failed"
+                    failed.processing_started_at = None
                     failed.indexed_at = None
                     failed.indexed_chunks = 0
                     failed.ingestion_error = str(exc)[:MAX_ERROR_LENGTH]
+                    if failed.ingestion_attempts >= MAX_ATTEMPTS:
+                        failed.ingestion_status = "failed"
+                        failed.next_attempt_at = None
+                    else:
+                        failed.ingestion_status = "pending"
+                        failed.next_attempt_at = datetime.now(timezone.utc) + _backoff(failed.ingestion_attempts)
                     db.commit()
     return processed
 
