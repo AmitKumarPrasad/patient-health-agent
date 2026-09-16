@@ -65,6 +65,24 @@ jobs:
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
 
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate backup scripts
+        run: |
+          bash -n ops/backup/backup_postgres.sh
+          bash -n ops/backup/restore_postgres.sh
+          bash -n ops/backup/backup_minio.sh
+          bash -n ops/backup/verify_restore.sh
+      - name: Verify backup documentation
+        run: |
+          test -s ops/backup/README.md
+          grep -q "Point-in-time recovery" ops/backup/README.md
+          grep -q "SHA-256" ops/backup/README.md
+          grep -q "RPO" ops/backup/README.md
+          grep -q "RTO" ops/backup/README.md
+
   e2e:
     runs-on: ubuntu-latest
     steps:
