@@ -11,7 +11,6 @@ from langgraph.prebuilt import ToolNode
 from typing_extensions import Annotated
 
 from app.agents.mcp_tools import load_authenticated_mcp_tools
-from app.services.audit import record_event
 from app.services.llm import get_llm
 
 
@@ -34,24 +33,7 @@ Do not request, infer, or accept a patient ID or Keycloak subject from the user.
 """
 
 
-def _record_document_search_event(db, *, subject: str, patient_id, result_count: int) -> None:
-    """Record document-search audit telemetry without turning audit storage into a data-path failure."""
-    try:
-        record_event(
-            db,
-            actor_subject=subject,
-            actor_role="patient",
-            action="record.search",
-            resource_type="patient_document",
-            patient_id=patient_id,
-            metadata={"result_count": result_count},
-        )
-    except Exception:
-        db.rollback()
-
-
 def _document_citations(messages: list) -> list[str]:
-    """Build concise source citations from successful patient-document tool results."""
     citations: list[str] = []
     seen: set[tuple[str, int]] = set()
     for message in messages:
@@ -76,8 +58,8 @@ def _document_citations(messages: list) -> list[str]:
     return citations
 
 
-async def build_appointment_graph(authenticated_subject: str):
-    tools: list[BaseTool] = await load_authenticated_mcp_tools(authenticated_subject)
+async def build_appointment_graph(authenticated_subject: str, request_id: str | None = None):
+    tools: list[BaseTool] = await load_authenticated_mcp_tools(authenticated_subject, request_id)
     llm = get_llm().bind_tools(tools)
     tool_node = ToolNode(tools)
 
@@ -115,8 +97,10 @@ async def build_appointment_graph(authenticated_subject: str):
     return graph.compile()
 
 
-async def _invoke_appointment_agent(user_request: str, authenticated_subject: str) -> str:
-    graph = await build_appointment_graph(authenticated_subject)
+async def _invoke_appointment_agent(
+    user_request: str, authenticated_subject: str, request_id: str | None = None
+) -> str:
+    graph = await build_appointment_graph(authenticated_subject, request_id)
     result = await graph.ainvoke(
         {
             "user_request": user_request,
@@ -127,6 +111,7 @@ async def _invoke_appointment_agent(user_request: str, authenticated_subject: st
     return result["response"]
 
 
-def invoke_appointment_agent(user_request: str, authenticated_subject: str) -> str:
-    """Synchronously invoke the MCP-backed LangGraph agent for FastAPI's sync route."""
-    return asyncio.run(_invoke_appointment_agent(user_request, authenticated_subject))
+def invoke_appointment_agent(
+    user_request: str, authenticated_subject: str, request_id: str | None = None
+) -> str:
+    return asyncio.run(_invoke_appointment_agent(user_request, authenticated_subject, request_id))
