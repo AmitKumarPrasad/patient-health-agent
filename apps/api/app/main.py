@@ -24,9 +24,11 @@ from app.middleware.access_log import AccessLogMiddleware
 from app.middleware.body_size import RequestBodySizeLimitMiddleware
 from app.middleware.rate_limit import FixedWindowRateLimitMiddleware
 from app.middleware.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
+from app.observability.safe_logging import PHISafeLogFilter
 
 
 logger = logging.getLogger(__name__)
+logger.addFilter(PHISafeLogFilter())
 
 app = FastAPI(
     title=settings.app_name,
@@ -46,7 +48,11 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = getattr(request.state, "request_id", "unknown")
-    logger.exception("Unhandled API exception request_id=%s", request_id)
+    logger.error(
+        "Unhandled API exception request_id=%s exception_type=%s",
+        request_id,
+        type(exc).__name__,
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
