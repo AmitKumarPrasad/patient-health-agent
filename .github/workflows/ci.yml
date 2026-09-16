@@ -78,7 +78,7 @@ jobs:
       - name: Verify backup documentation
         run: |
           test -s ops/backup/README.md
-          grep -q "Point-in-time recovery" ops/backup/README.md
+          grep -qi "Point-in-time recovery" ops/backup/README.md
           grep -q "SHA-256" ops/backup/README.md
           grep -q "RPO" ops/backup/README.md
           grep -q "RTO" ops/backup/README.md
