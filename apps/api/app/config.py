@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +45,31 @@ class Settings(BaseSettings):
     antivirus_host: str = "localhost"
     antivirus_port: int = Field(default=3310, ge=1, le=65535)
     antivirus_timeout_seconds: float = Field(default=15.0, gt=0)
+
+    @model_validator(mode="after")
+    def validate_production_security(self):
+        if self.app_env.lower() not in {"production", "prod"}:
+            return self
+
+        errors: list[str] = []
+        if self.postgres_password == "patient_health":
+            errors.append("POSTGRES_PASSWORD must not use the development default in production")
+        if self.minio_access_key == "minioadmin" or self.minio_secret_key == "minioadmin":
+            errors.append("MINIO credentials must not use the development defaults in production")
+        if not self.minio_secure:
+            errors.append("MINIO_SECURE must be true in production")
+        if not self.keycloak_issuer_url.lower().startswith("https://"):
+            errors.append("KEYCLOAK_ISSUER_URL must use HTTPS in production")
+        if not self.keycloak_jwks_url.lower().startswith("https://"):
+            errors.append("KEYCLOAK_JWKS_URL must use HTTPS in production")
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        if not origins or "*" in origins:
+            errors.append("CORS_ORIGINS must contain explicit origins in production")
+        if self.rate_limit_trust_forwarded_for:
+            errors.append("RATE_LIMIT_TRUST_FORWARDED_FOR must remain false unless the trusted proxy is explicitly configured")
+        if errors:
+            raise ValueError("Production security validation failed: " + "; ".join(errors))
+        return self
 
     @property
     def database_url(self) -> str:
