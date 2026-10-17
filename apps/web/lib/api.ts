@@ -54,7 +54,7 @@ export const api = {
   chat: (message: string) => request<AgentResponse>("/api/agent/chat", { method: "POST", body: JSON.stringify({ message }) }),
   recordAssistant: (message: string) => request<AgentResponse>("/api/records/assistant", { method: "POST", body: JSON.stringify({ message }) }),
   research: (message: string) => request<ResearchResponse>("/api/research", { method: "POST", body: JSON.stringify({ message }) }),
-  researchSessions: () => request<ResearchSessionSummary[]>("/api/research/sessions"),
+  researchSessions: (query = "") => request<ResearchSessionSummary[]>(`/api/research/sessions${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`),
   createResearchSession: () => request<ResearchSession>("/api/research/sessions", { method: "POST" }),
   researchSession: (id: string) => request<ResearchSession>(`/api/research/sessions/${id}`),
   renameResearchSession: (id: string, title: string) => request<ResearchSession>(`/api/research/sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ title }) }),
