@@ -91,3 +91,35 @@ def test_readiness_reports_not_ready_when_database_is_unreachable() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"status": "not_ready", "database": "unreachable"}
+
+
+def test_database_health_reports_safe_503_when_database_is_unavailable() -> None:
+    class BrokenSession:
+        def execute(self, statement):
+            raise OperationalError(statement, {}, Exception("password=secret internal-db-host"))
+
+    app.dependency_overrides[get_db] = lambda: BrokenSession()
+    try:
+        response = client.get("/health/db")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "database": "unreachable"}
+    assert "secret" not in response.text
+    assert "internal-db-host" not in response.text
+
+
+def test_database_health_reports_reachable_when_database_is_healthy() -> None:
+    class FakeSession:
+        def execute(self, statement):
+            assert str(statement) == "SELECT 1"
+
+    app.dependency_overrides[get_db] = lambda: FakeSession()
+    try:
+        response = client.get("/health/db")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "database": "reachable"}
