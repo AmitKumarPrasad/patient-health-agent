@@ -27,6 +27,18 @@ class ResearchRequest(BaseModel):
         return value
 
 
+class ResearchTitleUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        title = value.strip()
+        if not title:
+            raise ValueError("Research title cannot be blank")
+        return title
+
+
 class ResearchSource(BaseModel):
     title: str
     url: str
@@ -209,3 +221,18 @@ def delete_session(
     session = _owned_session(db, session_id, patient_subject(user))
     db.delete(session)
     db.commit()
+
+
+@router.patch("/sessions/{session_id}", response_model=ResearchSessionResponse)
+def rename_session(
+    session_id: UUID,
+    request: ResearchTitleUpdate,
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> ResearchSessionResponse:
+    owner = patient_subject(user)
+    session = _owned_session(db, session_id, owner)
+    session.title = request.title
+    session.updated_at = func.now()
+    db.commit()
+    return _session_response(_owned_session(db, session_id, owner))
