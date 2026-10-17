@@ -126,3 +126,20 @@ def test_only_owner_can_rename_research_session(db_session):
     assert renamed.status_code == 200
     assert renamed.json()["title"] == "New title"
     assert owner.get(url).json()["title"] == "New title"
+
+
+def test_research_history_search_is_case_insensitive_and_owner_scoped(db_session):
+    db_session.add_all([
+        ResearchSession(owner_subject="patient-a", title="Cardiac screening"),
+        ResearchSession(owner_subject="patient-a", title="Nutrition basics"),
+        ResearchSession(owner_subject="patient-b", title="Cardiac private notes"),
+    ])
+    db_session.commit()
+    client = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+    result = client.get("/api/research/sessions", params={"q": "CARDIAC"})
+    assert result.status_code == 200
+    assert [item["title"] for item in result.json()] == ["Cardiac screening"]
+    assert client.get("/api/research/sessions", params={"q": "x" * 101}).status_code == 422
+    assert client.get("/api/research/sessions", params={"q": "%"}).json() == []
