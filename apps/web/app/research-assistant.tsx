@@ -16,6 +16,8 @@ export default function ResearchAssistant() {
   const [sessions, setSessions] = useState<ResearchSessionSummary[]>([]);
   const [session, setSession] = useState<ResearchSession | null>(null);
   const [message, setMessage] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [searchingHistory, setSearchingHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
@@ -32,11 +34,39 @@ export default function ResearchAssistant() {
     finally { setInitializing(false); }
   }
 
+  async function searchHistory(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setSearchingHistory(true);
+    try {
+      const items = await api.researchSessions(historyQuery);
+      setSessions(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to search research history");
+    } finally {
+      setSearchingHistory(false);
+    }
+  }
+
+  async function clearHistorySearch() {
+    setHistoryQuery("");
+    setError("");
+    setSearchingHistory(true);
+    try {
+      setSessions(await api.researchSessions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to refresh research history");
+    } finally {
+      setSearchingHistory(false);
+    }
+  }
+
   async function newSession() {
     setError("");
     try {
       const created = await api.createResearchSession();
       setSession(created);
+      setHistoryQuery("");
       setSessions((current) => [created, ...current]);
       setMessage("");
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to create session"); }
@@ -103,7 +133,7 @@ export default function ResearchAssistant() {
       <button type="button" onClick={newSession}>New research</button>
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 28%) 1fr", gap: 16, marginTop: 16 }}>
-      <aside><strong>History</strong>{sessions.length === 0 && <p className="muted">No sessions yet.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
+      <aside><strong>History</strong><form onSubmit={searchHistory} style={{ marginTop: 8 }}><input type="search" aria-label="Search research history" placeholder="Search conversation titles" value={historyQuery} maxLength={100} onChange={(event) => setHistoryQuery(event.target.value)} /><div style={{ display: "flex", gap: 6, marginTop: 6 }}><button type="submit" disabled={searchingHistory}>{searchingHistory ? "Searching…" : "Search"}</button><button type="button" onClick={() => void clearHistorySearch()} disabled={searchingHistory}>Clear</button></div></form>{sessions.length === 0 && <p className="muted">No matching conversations.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
       <div>
         <div style={{ minHeight: 180 }}>{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
         <form className="chat" onSubmit={submit}>
