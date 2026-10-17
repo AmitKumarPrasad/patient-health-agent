@@ -209,3 +209,40 @@ def test_research_session_routes_reject_unprivileged_roles(db_session, method, p
     ))
     response = client.request(method, path, json=payload)
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, ValueError])
+def test_public_research_errors_do_not_expose_secrets(db_session, monkeypatch, error_type):
+    secret = "sk-test-sensitive-secret"
+    def fail_research(*args, **kwargs):
+        raise error_type(f"Invalid API key: {secret}")
+    monkeypatch.setattr("app.api.research.invoke_research_agent", fail_research)
+    client = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+    response = client.post("/api/research", json={"message": "Explain screening"})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Research assistant is temporarily unavailable"}
+    assert secret not in response.text
+
+
+def test_failed_research_message_is_not_persisted(db_session, monkeypatch):
+    session = ResearchSession(owner_subject="patient-a", title="Existing research")
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+
+    def fail_research(*args, **kwargs):
+        raise RuntimeError("TAVILY_API_KEY=private-value")
+    monkeypatch.setattr("app.api.research.invoke_research_agent", fail_research)
+    client = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+    response = client.post(
+        f"/api/research/sessions/{session.id}/messages",
+        json={"message": "Explain heart health"},
+    )
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Research assistant is temporarily unavailable"}
+    assert "private-value" not in response.text
+    assert db_session.query(ResearchMessage).filter_by(session_id=session.id).count() == 0

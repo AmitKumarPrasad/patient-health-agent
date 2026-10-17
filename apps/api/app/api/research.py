@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,8 +12,11 @@ from app.agents.research_agent import invoke_research_agent
 from app.auth.keycloak import patient_subject, require_roles
 from app.db.session import get_db
 from app.models.research import ResearchMessage, ResearchSession
+from app.observability.safe_logging import safe_log_exception
 
 router = APIRouter(prefix="/api/research", tags=["research"])
+logger = logging.getLogger(__name__)
+RESEARCH_UNAVAILABLE_DETAIL = "Research assistant is temporarily unavailable"
 
 
 class ResearchRequest(BaseModel):
@@ -118,7 +122,8 @@ def research(
     try:
         return ResearchResponse(**invoke_research_agent(request.message))
     except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        safe_log_exception(logger, "research_agent_unavailable", exc)
+        raise HTTPException(status_code=503, detail=RESEARCH_UNAVAILABLE_DETAIL) from exc
 
 
 @router.post(
@@ -200,7 +205,8 @@ def send_session_message(
     try:
         result = invoke_research_agent(question, history=history)
     except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        safe_log_exception(logger, "research_agent_unavailable", exc)
+        raise HTTPException(status_code=503, detail=RESEARCH_UNAVAILABLE_DETAIL) from exc
 
     db.add(ResearchMessage(session=session, role="user", content=question))
     db.add(
