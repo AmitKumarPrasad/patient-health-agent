@@ -48,6 +48,24 @@ export default function ResearchAssistant() {
     catch (err) { setError(err instanceof Error ? err.message : "Unable to load session"); }
   }
 
+  async function renameSession(item: ResearchSessionSummary) {
+    const input = window.prompt("Rename research conversation", item.title);
+    if (input === null) return;
+    const title = input.trim();
+    if (!title || title.length > 200) {
+      setError("Research title must be between 1 and 200 characters.");
+      return;
+    }
+    setError("");
+    try {
+      const updated = await api.renameResearchSession(item.id, title);
+      setSessions((current) => current.map((entry) => entry.id === item.id ? updated : entry).sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+      setSession((current) => current?.id === item.id ? updated : current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to rename research session");
+    }
+  }
+
   async function deleteSession(id: string) {
     if (!window.confirm("Delete this research conversation permanently?")) return;
     setError("");
@@ -85,7 +103,7 @@ export default function ResearchAssistant() {
       <button type="button" onClick={newSession}>New research</button>
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 28%) 1fr", gap: 16, marginTop: 16 }}>
-      <aside><strong>History</strong>{sessions.length === 0 && <p className="muted">No sessions yet.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
+      <aside><strong>History</strong>{sessions.length === 0 && <p className="muted">No sessions yet.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
       <div>
         <div style={{ minHeight: 180 }}>{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
         <form className="chat" onSubmit={submit}>
