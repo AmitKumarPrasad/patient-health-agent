@@ -67,6 +67,12 @@ def test_production_security_configuration_is_accepted() -> None:
         ("keycloak_jwks_url", "http://identity.example.com/realms/patient-health/protocol/openid-connect/certs"),
         ("cors_origins", "*"),
         ("cors_origins", ""),
+        ("cors_origins", "http://app.example.com"),
+        ("cors_origins", "https://localhost:3000"),
+        ("cors_origins", "https://*.example.com"),
+        ("cors_origins", "https://app.example.com/path"),
+        ("cors_origins", "https://user:password@app.example.com"),
+        ("cors_origins", "https://app.example.com:bad"),
         ("rate_limit_requests", 0),
         ("rate_limit_trust_forwarded_for", True),
     ],
@@ -74,3 +80,8 @@ def test_production_security_configuration_is_accepted() -> None:
 def test_production_insecure_configuration_is_rejected(field: str, value) -> None:
     with pytest.raises(ValidationError):
         _production_settings(**{field: value})
+
+
+def test_production_allows_multiple_explicit_https_cors_origins() -> None:
+    settings = _production_settings(cors_origins="https://app.example.com,https://staff.example.com:8443")
+    assert settings.cors_origins == "https://app.example.com,https://staff.example.com:8443"

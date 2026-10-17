@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -66,6 +67,26 @@ class Settings(BaseSettings):
         origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
         if not origins or "*" in origins:
             errors.append("CORS_ORIGINS must contain explicit origins in production")
+        for origin in origins:
+            try:
+                parsed = urlsplit(origin)
+                hostname = (parsed.hostname or "").lower().rstrip(".")
+                if (
+                    parsed.scheme != "https"
+                    or not hostname
+                    or hostname == "localhost"
+                    or hostname.endswith((".localhost", ".local", ".internal"))
+                    or parsed.username is not None
+                    or parsed.password is not None
+                    or parsed.path not in ("", "/")
+                    or parsed.query
+                    or parsed.fragment
+                    or parsed.port == 0
+                    or "*" in hostname
+                ):
+                    errors.append("CORS_ORIGINS must use explicit HTTPS web origins in production")
+            except ValueError:
+                errors.append("CORS_ORIGINS contains an invalid web origin")
         if self.rate_limit_requests <= 0:
             errors.append("RATE_LIMIT_REQUESTS must be greater than zero in production")
         if self.rate_limit_trust_forwarded_for:
