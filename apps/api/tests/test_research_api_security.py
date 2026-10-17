@@ -2,20 +2,38 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from app.api.research import router
-from app.auth.keycloak import require_roles
+from app.auth.keycloak import get_current_user
+from app.db.base import Base
 from app.db.session import get_db
 from app.models.research import ResearchSession
+
+
+@pytest.fixture
+def db_session():
+    engine = create_engine(
+        "sqlite+pysqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[ResearchSession.__table__])
+    with Session(engine) as db:
+        yield db
+    engine.dispose()
 
 
 def _build_app(db, user):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[require_roles("patient", "provider", "admin")] = lambda: user
+    app.dependency_overrides[get_current_user] = lambda: user
     return app
 
 
