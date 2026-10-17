@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -143,14 +143,17 @@ def create_session(
 
 @router.get("/sessions", response_model=list[ResearchSessionSummary])
 def list_sessions(
+    q: str | None = Query(default=None, max_length=100),
     user: dict = Depends(require_roles("patient", "provider", "admin")),
     db: Session = Depends(get_db),
 ) -> list[ResearchSessionSummary]:
+    stmt = select(ResearchSession).where(
+        ResearchSession.owner_subject == patient_subject(user)
+    )
+    if q and q.strip():
+        stmt = stmt.where(ResearchSession.title.icontains(q.strip(), autoescape=True))
     rows = db.scalars(
-        select(ResearchSession)
-        .where(ResearchSession.owner_subject == patient_subject(user))
-        .order_by(ResearchSession.updated_at.desc())
-        .limit(50)
+        stmt.order_by(ResearchSession.updated_at.desc()).limit(50)
     ).all()
     return [
         ResearchSessionSummary(
