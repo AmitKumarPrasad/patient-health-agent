@@ -84,3 +84,22 @@ def test_missing_research_session_returns_404(db_session):
     response = client.get(f"/api/research/sessions/{uuid4()}")
     assert response.status_code == 404
     assert response.json()["detail"] == "Research session not found"
+
+
+def test_only_owner_can_delete_research_session(db_session):
+    session = ResearchSession(owner_subject="patient-a", title="Delete this")
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+
+    other = TestClient(_build_app(
+        db_session, {"sub": "patient-b", "realm_access": {"roles": ["patient"]}}
+    ))
+    owner = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+
+    assert other.delete(f"/api/research/sessions/{session.id}").status_code == 404
+    assert db_session.get(ResearchSession, session.id) is not None
+    assert owner.delete(f"/api/research/sessions/{session.id}").status_code == 204
+    assert owner.get(f"/api/research/sessions/{session.id}").status_code == 404
