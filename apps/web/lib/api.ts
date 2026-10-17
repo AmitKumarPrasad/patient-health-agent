@@ -57,6 +57,7 @@ export const api = {
   researchSessions: () => request<ResearchSessionSummary[]>("/api/research/sessions"),
   createResearchSession: () => request<ResearchSession>("/api/research/sessions", { method: "POST" }),
   researchSession: (id: string) => request<ResearchSession>(`/api/research/sessions/${id}`),
+  renameResearchSession: (id: string, title: string) => request<ResearchSession>(`/api/research/sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ title }) }),
   deleteResearchSession: async (id: string): Promise<void> => {
     const keycloak = getKeycloak();
     await keycloak.updateToken(30);
