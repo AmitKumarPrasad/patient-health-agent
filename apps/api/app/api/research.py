@@ -198,3 +198,14 @@ def send_session_message(
     db.commit()
 
     return _session_response(_owned_session(db, session_id, owner))
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: UUID,
+    user: dict = Depends(require_roles("patient", "provider", "admin")),
+    db: Session = Depends(get_db),
+) -> None:
+    session = _owned_session(db, session_id, patient_subject(user))
+    db.delete(session)
+    db.commit()
