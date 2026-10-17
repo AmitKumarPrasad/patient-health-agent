@@ -12,6 +12,14 @@ def test_source_urls_allow_only_normal_web_links():
         "https://user:password@example.org",
         "https://example.org/path\\nattack",
         "https://example.org:bad/path",
+        "http://localhost:8000/private",
+        "http://127.0.0.1/admin",
+        "http://10.0.0.2/",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]/",
+        "https://service.internal/",
+        "https://files.local/",
+        "http://2130706433/",
         "https://example.org/path\nattack",
         "https://",
         "https://example.org/" + "a" * 1000,
@@ -25,6 +33,7 @@ def test_source_metadata_deduplicates_and_filters_unsafe_urls():
         {"url": "https://example.org/a", "title": "Valid"},
         {"url": "https://example.org/a", "title": "Duplicate"},
         {"url": "data:text/html,boom", "title": "Unsafe"},
+        {"url": "http://127.0.0.1/private", "title": "Local address"},
         {"url": "http://example.org/b", "title": "Another"},
     ]}
     assert _source_metadata(results) == [

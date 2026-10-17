@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -24,9 +25,20 @@ def is_safe_source_url(url: str) -> bool:
         return False
     try:
         parsed = urlsplit(url)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        if not hostname or hostname == "localhost" or hostname.endswith(
+            (".localhost", ".local", ".internal")
+        ):
+            return False
+        try:
+            if not ip_address(hostname).is_global:
+                return False
+        except ValueError:
+            # Normal DNS names are allowed; do not resolve arbitrary hosts here.
+            if "." not in hostname or hostname.replace(".", "").isdigit():
+                return False
         return (
             parsed.scheme.lower() in {"https", "http"}
-            and bool(parsed.hostname)
             and parsed.username is None
             and parsed.password is None
             and parsed.port != 0
