@@ -57,6 +57,15 @@ export const api = {
   researchSessions: () => request<ResearchSessionSummary[]>("/api/research/sessions"),
   createResearchSession: () => request<ResearchSession>("/api/research/sessions", { method: "POST" }),
   researchSession: (id: string) => request<ResearchSession>(`/api/research/sessions/${id}`),
+  deleteResearchSession: async (id: string): Promise<void> => {
+    const keycloak = getKeycloak();
+    await keycloak.updateToken(30);
+    const response = await fetch(`${API_URL}/api/research/sessions/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${keycloak.token ?? ""}` },
+    });
+    if (!response.ok) throw new Error("Unable to delete research session");
+  },
   sendResearchMessage: (id: string, message: string) => request<ResearchSession>(`/api/research/sessions/${id}/messages`, { method: "POST", body: JSON.stringify({ message }) }),
   searchRecords: (query = "") => request<RecordSearchResponse>(`/api/records/search${query ? `?q=${encodeURIComponent(query)}` : ""}`),
   documents: () => request<PatientDocument[]>("/api/documents"),
