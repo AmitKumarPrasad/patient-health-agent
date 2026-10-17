@@ -1,3 +1,4 @@
+import { apiErrorMessage, networkErrorMessage } from "./api-errors";
 import { getKeycloak } from "../app/keycloak";
 
 export type Patient = {
@@ -26,17 +27,29 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const keycloak = getKeycloak();
-  await keycloak.updateToken(30);
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${keycloak.token ?? ""}`, ...(init.headers ?? {}) },
-  });
+  try {
+    await keycloak.updateToken(30);
+  } catch {
+    throw new Error("Your login session has expired. Please sign in again.");
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${keycloak.token ?? ""}`, ...(init.headers ?? {}) },
+    });
+  } catch (error) {
+    throw new Error(networkErrorMessage(error));
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    const detail = body?.detail ?? `Request failed with status ${response.status}`;
-    throw new Error(typeof detail === "string" ? detail : "Request failed");
+    throw new Error(apiErrorMessage(response.status, body?.detail));
   }
-  return response.json() as Promise<T>;
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error("The service returned an invalid response. Please try again.");
+  }
 }
 
 export const api = {
