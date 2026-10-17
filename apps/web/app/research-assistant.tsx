@@ -48,6 +48,21 @@ export default function ResearchAssistant() {
     catch (err) { setError(err instanceof Error ? err.message : "Unable to load session"); }
   }
 
+  async function deleteSession(id: string) {
+    if (!window.confirm("Delete this research conversation permanently?")) return;
+    setError("");
+    try {
+      await api.deleteResearchSession(id);
+      const remaining = sessions.filter((item) => item.id !== id);
+      setSessions(remaining);
+      if (session?.id === id) {
+        setSession(remaining.length ? await api.researchSession(remaining[0].id) : null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete research session");
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const question = message.trim();
@@ -70,7 +85,7 @@ export default function ResearchAssistant() {
       <button type="button" onClick={newSession}>New research</button>
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 28%) 1fr", gap: 16, marginTop: 16 }}>
-      <aside><strong>History</strong>{sessions.length === 0 && <p className="muted">No sessions yet.</p>}{sessions.map((item) => <button key={item.id} type="button" onClick={() => void selectSession(item.id)} style={{ display: "block", width: "100%", textAlign: "left", marginTop: 8, overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button>)}</aside>
+      <aside><strong>History</strong>{sessions.length === 0 && <p className="muted">No sessions yet.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
       <div>
         <div style={{ minHeight: 180 }}>{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
         <form className="chat" onSubmit={submit}>
