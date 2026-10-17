@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -18,6 +19,22 @@ Answer only from the supplied public search context. Do not invent sources or UR
 """
 
 
+def is_safe_source_url(url: str) -> bool:
+    if not url or len(url) > 1000 or any(char.isspace() or ord(char) < 32 for char in url):
+        return False
+    try:
+        parsed = urlsplit(url)
+        return (
+            parsed.scheme.lower() in {"https", "http"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port != 0
+        )
+    except ValueError:
+        return False
+
+
 def _source_metadata(results: Any) -> list[dict[str, str]]:
     items = results if isinstance(results, list) else results.get("results", []) if isinstance(results, dict) else []
     sources: list[dict[str, str]] = []
@@ -27,10 +44,10 @@ def _source_metadata(results: Any) -> list[dict[str, str]]:
             continue
         url = str(item.get("url", "")).strip()
         title = str(item.get("title", "")).strip() or url
-        if not url or url in seen:
+        if not is_safe_source_url(url) or url in seen:
             continue
         seen.add(url)
-        sources.append({"title": title[:200], "url": url[:1000]})
+        sources.append({"title": title[:200], "url": url})
         if len(sources) >= 5:
             break
     return sources

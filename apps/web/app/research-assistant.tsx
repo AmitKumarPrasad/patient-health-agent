@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, ResearchMessage, ResearchSession, ResearchSessionSummary, ResearchSource } from "../lib/api";
 
 function SourceList({ sources }: { sources: ResearchSource[] }) {
-  if (!sources.length) return null;
-  return <div style={{ marginTop: 12 }}><strong>Sources</strong><ol>{sources.map((source) => <li key={source.url} style={{ marginBottom: 6 }}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ol></div>;
+  const safeSources = sources.filter((source) => /^https?:\/\//i.test(source.url) && !/[\s\\]/.test(source.url));
+  if (!safeSources.length) return null;
+  return <div style={{ marginTop: 12 }}><strong>Sources</strong><ol>{safeSources.map((source) => <li key={source.url} style={{ marginBottom: 6 }}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ol></div>;
 }
 
 function MessageBubble({ message }: { message: ResearchMessage }) {

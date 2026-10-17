@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.agents.research_agent import invoke_research_agent
+from app.agents.research_agent import invoke_research_agent, is_safe_source_url
 from app.auth.keycloak import patient_subject, require_roles
 from app.db.session import get_db
 from app.models.research import ResearchMessage, ResearchSession
@@ -87,7 +87,13 @@ def _session_response(session: ResearchSession) -> ResearchSessionResponse:
                 id=message.id,
                 role=message.role,
                 content=message.content,
-                sources=[ResearchSource(**source) for source in (message.sources or [])],
+                sources=[
+                    ResearchSource(**source)
+                    for source in (message.sources or [])
+                    if isinstance(source, dict)
+                    and isinstance(source.get("url"), str)
+                    and is_safe_source_url(source["url"])
+                ],
                 created_at=message.created_at.isoformat(),
             )
             for message in session.messages
@@ -120,7 +126,12 @@ def research(
     _: dict = Depends(require_roles("patient", "provider", "admin")),
 ) -> ResearchResponse:
     try:
-        return ResearchResponse(**invoke_research_agent(request.message))
+        result = invoke_research_agent(request.message)
+        result["sources"] = [
+            source for source in result["sources"]
+            if is_safe_source_url(source.get("url", ""))
+        ]
+        return ResearchResponse(**result)
     except (RuntimeError, ValueError) as exc:
         safe_log_exception(logger, "research_agent_unavailable", exc)
         raise HTTPException(status_code=503, detail=RESEARCH_UNAVAILABLE_DETAIL) from exc
@@ -208,6 +219,10 @@ def send_session_message(
         safe_log_exception(logger, "research_agent_unavailable", exc)
         raise HTTPException(status_code=503, detail=RESEARCH_UNAVAILABLE_DETAIL) from exc
 
+    result["sources"] = [
+        source for source in result["sources"]
+        if is_safe_source_url(source.get("url", ""))
+    ]
     db.add(ResearchMessage(session=session, role="user", content=question))
     db.add(
         ResearchMessage(
