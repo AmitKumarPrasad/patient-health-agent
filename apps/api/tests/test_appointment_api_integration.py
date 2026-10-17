@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -17,7 +17,7 @@ PATIENT_SUBJECT = "integration-patient-subject"
 PROVIDER_SUBJECT = "integration-provider-subject"
 PROVIDER_ID = UUID("22222222-2222-2222-2222-222222222222")
 PATIENT_ID = UUID("11111111-1111-1111-1111-111111111111")
-APPOINTMENT_DATE = date(2026, 10, 12)
+APPOINTMENT_DATE = date.today() + timedelta(days=7)
 
 
 def _build_database() -> tuple[object, Session]:
