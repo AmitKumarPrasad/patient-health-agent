@@ -17,6 +17,10 @@ export default function ResearchAssistant() {
   const [session, setSession] = useState<ResearchSession | null>(null);
   const [message, setMessage] = useState("");
   const [historyQuery, setHistoryQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [historyPage, setHistoryPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const pageSize = 20;
   const [searchingHistory, setSearchingHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -28,6 +32,7 @@ export default function ResearchAssistant() {
     try {
       const items = await api.researchSessions();
       setSessions(items);
+      setHasNextPage(items.length === pageSize);
       if (items.length) setSession(await api.researchSession(items[0].id));
       else setSession(await api.createResearchSession());
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load research sessions"); }
@@ -39,7 +44,11 @@ export default function ResearchAssistant() {
     setError("");
     setSearchingHistory(true);
     try {
-      const items = await api.researchSessions(historyQuery);
+      const query = historyQuery.trim();
+      const items = await api.researchSessions(query, 0, pageSize);
+      setAppliedQuery(query);
+      setHistoryPage(0);
+      setHasNextPage(items.length === pageSize);
       setSessions(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to search research history");
@@ -53,9 +62,29 @@ export default function ResearchAssistant() {
     setError("");
     setSearchingHistory(true);
     try {
-      setSessions(await api.researchSessions());
+      const items = await api.researchSessions("", 0, pageSize);
+      setAppliedQuery("");
+      setHistoryPage(0);
+      setHasNextPage(items.length === pageSize);
+      setSessions(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to refresh research history");
+    } finally {
+      setSearchingHistory(false);
+    }
+  }
+
+  async function changeHistoryPage(nextPage: number) {
+    if (nextPage < 0) return;
+    setError("");
+    setSearchingHistory(true);
+    try {
+      const items = await api.researchSessions(appliedQuery, nextPage * pageSize, pageSize);
+      setHistoryPage(nextPage);
+      setHasNextPage(items.length === pageSize);
+      setSessions(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load research history page");
     } finally {
       setSearchingHistory(false);
     }
@@ -67,7 +96,11 @@ export default function ResearchAssistant() {
       const created = await api.createResearchSession();
       setSession(created);
       setHistoryQuery("");
-      setSessions((current) => [created, ...current]);
+      setAppliedQuery("");
+      setHistoryPage(0);
+      const items = await api.researchSessions("", 0, pageSize);
+      setHasNextPage(items.length === pageSize);
+      setSessions(items);
       setMessage("");
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to create session"); }
   }
@@ -133,7 +166,7 @@ export default function ResearchAssistant() {
       <button type="button" onClick={newSession}>New research</button>
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 28%) 1fr", gap: 16, marginTop: 16 }}>
-      <aside><strong>History</strong><form onSubmit={searchHistory} style={{ marginTop: 8 }}><input type="search" aria-label="Search research history" placeholder="Search conversation titles" value={historyQuery} maxLength={100} onChange={(event) => setHistoryQuery(event.target.value)} /><div style={{ display: "flex", gap: 6, marginTop: 6 }}><button type="submit" disabled={searchingHistory}>{searchingHistory ? "Searching…" : "Search"}</button><button type="button" onClick={() => void clearHistorySearch()} disabled={searchingHistory}>Clear</button></div></form>{sessions.length === 0 && <p className="muted">No matching conversations.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}</aside>
+      <aside><strong>History</strong><form onSubmit={searchHistory} style={{ marginTop: 8 }}><input type="search" aria-label="Search research history" placeholder="Search conversation titles" value={historyQuery} maxLength={100} onChange={(event) => setHistoryQuery(event.target.value)} /><div style={{ display: "flex", gap: 6, marginTop: 6 }}><button type="submit" disabled={searchingHistory}>{searchingHistory ? "Searching…" : "Search"}</button><button type="button" onClick={() => void clearHistorySearch()} disabled={searchingHistory}>Clear</button></div></form>{sessions.length === 0 && <p className="muted">No matching conversations.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}<div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 12 }}><button type="button" disabled={searchingHistory || historyPage === 0} onClick={() => void changeHistoryPage(historyPage - 1)}>Previous</button><span aria-live="polite">Page {historyPage + 1}</span><button type="button" disabled={searchingHistory || !hasNextPage} onClick={() => void changeHistoryPage(historyPage + 1)}>Next</button></div></aside>
       <div>
         <div style={{ minHeight: 180 }}>{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
         <form className="chat" onSubmit={submit}>
