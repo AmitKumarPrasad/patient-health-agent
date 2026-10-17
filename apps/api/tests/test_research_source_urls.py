@@ -12,6 +12,7 @@ def test_source_urls_allow_only_normal_web_links():
         "https://user:password@example.org",
         "https://example.org/path\\nattack",
         "https://example.org:bad/path",
+        "https://example.org/path\nattack",
         "https://",
         "https://example.org/" + "a" * 1000,
     ):

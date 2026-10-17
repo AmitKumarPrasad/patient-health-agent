@@ -20,7 +20,7 @@ Answer only from the supplied public search context. Do not invent sources or UR
 
 
 def is_safe_source_url(url: str) -> bool:
-    if not url or len(url) > 1000 or any(char.isspace() or ord(char) < 32 for char in url):
+    if not url or len(url) > 1000 or any(char.isspace() or ord(char) < 32 or char == chr(92) for char in url):
         return False
     try:
         parsed = urlsplit(url)
