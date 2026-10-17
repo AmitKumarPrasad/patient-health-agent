@@ -144,6 +144,8 @@ def create_session(
 @router.get("/sessions", response_model=list[ResearchSessionSummary])
 def list_sessions(
     q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0, le=100000),
     user: dict = Depends(require_roles("patient", "provider", "admin")),
     db: Session = Depends(get_db),
 ) -> list[ResearchSessionSummary]:
@@ -153,7 +155,9 @@ def list_sessions(
     if q and q.strip():
         stmt = stmt.where(ResearchSession.title.icontains(q.strip(), autoescape=True))
     rows = db.scalars(
-        stmt.order_by(ResearchSession.updated_at.desc()).limit(50)
+        stmt.order_by(ResearchSession.updated_at.desc(), ResearchSession.id.desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
     return [
         ResearchSessionSummary(
