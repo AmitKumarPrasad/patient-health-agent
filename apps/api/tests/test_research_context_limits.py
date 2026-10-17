@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 from app.agents import research_agent
@@ -63,6 +64,7 @@ def test_research_context_caps_excerpts_and_rejects_malformed_tool_results():
     context = _search_context({"results": [
         {"url": "https://example.org/article", "content": "x" * 100_000},
     ]})
-    assert context.count("x") == MAX_RESULT_EXCERPT_CHARS
+    assert len(json.loads(context)[0]["excerpt"]) == MAX_RESULT_EXCERPT_CHARS
+    assert json.loads(context)[0]["excerpt"] == "x" * MAX_RESULT_EXCERPT_CHARS
     assert _search_context({"results": "not-a-list"}) == "[]"
     assert _search_context(None) == "[]"
