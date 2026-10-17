@@ -284,7 +284,7 @@ export default function Home() {
           <p className="subtitle">Manage appointments and use your record assistant to find information in your own uploaded health documents. The AI does not provide clinical diagnosis or treatment decisions.</p>
         </section>
 
-        {error && <div className="error" style={{ marginBottom: 18 }}>{error}</div>}
+        {error && <div className="error" role="alert" style={{ marginBottom: 18 }}>{error}{!loading && !patient && <button type="button" onClick={() => void loadDashboard()} style={{ marginLeft: 12 }}>Retry dashboard</button>}</div>}
 
         <section className="grid">
           <div className="card wide" id="appointments">
