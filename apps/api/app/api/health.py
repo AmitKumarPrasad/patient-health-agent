@@ -15,7 +15,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/health/db")
+@router.get("/health/db", response_model=None)
 def database_health(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
     try:
         db.execute(text("SELECT 1"))
