@@ -168,3 +168,44 @@ def test_research_history_pagination_is_stable_and_owner_scoped(db_session):
     assert all(entry["title"].startswith("Page ") for result in (first, second, third) for entry in result.json())
     for params in ({"limit": 0}, {"limit": 51}, {"offset": -1}, {"offset": 100001}):
         assert client.get("/api/research/sessions", params=params).status_code == 422
+
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("GET", "/api/research/sessions", None),
+        ("POST", "/api/research/sessions", None),
+        ("GET", "/api/research/sessions/11111111-1111-1111-1111-111111111111", None),
+        ("PATCH", "/api/research/sessions/11111111-1111-1111-1111-111111111111", {"title": "Forbidden"}),
+        ("DELETE", "/api/research/sessions/11111111-1111-1111-1111-111111111111", None),
+        ("POST", "/api/research/sessions/11111111-1111-1111-1111-111111111111/messages", {"message": "Research request"}),
+    ],
+)
+def test_research_session_routes_reject_anonymous_users(db_session, method, path, payload):
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db_session
+    client = TestClient(app)
+    response = client.request(method, path, json=payload)
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("GET", "/api/research/sessions", None),
+        ("POST", "/api/research/sessions", None),
+        ("GET", "/api/research/sessions/11111111-1111-1111-1111-111111111111", None),
+        ("PATCH", "/api/research/sessions/11111111-1111-1111-1111-111111111111", {"title": "Forbidden"}),
+        ("DELETE", "/api/research/sessions/11111111-1111-1111-1111-111111111111", None),
+        ("POST", "/api/research/sessions/11111111-1111-1111-1111-111111111111/messages", {"message": "Research request"}),
+    ],
+)
+def test_research_session_routes_reject_unprivileged_roles(db_session, method, path, payload):
+    client = TestClient(_build_app(
+        db_session,
+        {"sub": "unauthorized-user", "realm_access": {"roles": ["guest"]}},
+    ))
+    response = client.request(method, path, json=payload)
+    assert response.status_code == 403
