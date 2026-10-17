@@ -103,3 +103,26 @@ def test_only_owner_can_delete_research_session(db_session):
     assert db_session.get(ResearchSession, session.id) is not None
     assert owner.delete(f"/api/research/sessions/{session.id}").status_code == 204
     assert owner.get(f"/api/research/sessions/{session.id}").status_code == 404
+
+
+def test_only_owner_can_rename_research_session(db_session):
+    session = ResearchSession(owner_subject="patient-a", title="Old title")
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+
+    other = TestClient(_build_app(
+        db_session, {"sub": "patient-b", "realm_access": {"roles": ["patient"]}}
+    ))
+    owner = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+    url = f"/api/research/sessions/{session.id}"
+    assert other.patch(url, json={"title": "Intrusion"}).status_code == 404
+    assert owner.patch(url, json={"title": "   "}).status_code == 422
+    assert owner.patch(url, json={"title": "x" * 201}).status_code == 422
+
+    renamed = owner.patch(url, json={"title": "  New title  "})
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "New title"
+    assert owner.get(url).json()["title"] == "New title"
