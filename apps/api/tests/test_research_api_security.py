@@ -13,7 +13,7 @@ from app.api.research import router
 from app.auth.keycloak import get_current_user
 from app.db.base import Base
 from app.db.session import get_db
-from app.models.research import ResearchSession
+from app.models.research import ResearchMessage, ResearchSession
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def db_session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[ResearchSession.__table__])
+    Base.metadata.create_all(engine, tables=[ResearchSession.__table__, ResearchMessage.__table__])
     with Session(engine) as db:
         yield db
     engine.dispose()
