@@ -20,7 +20,7 @@ test("research conversations can be created, renamed, searched and deleted", asy
 
   await expect(page.getByRole("heading", { name: "Public health research assistant" })).toBeVisible();
   const title = `E2E research ${Date.now()}`;
-  await page.getByRole("button", { name: "New research" }).click();
+  await page.getByRole("button", { name: "New research", exact: true }).click();
   const original = page.getByRole("button", { name: "Rename New research session" }).first();
   await expect(original).toBeVisible();
 
@@ -37,5 +37,5 @@ test("research conversations can be created, renamed, searched and deleted", asy
   await expect(page.getByRole("button", { name: title, exact: true })).not.toBeVisible();
 
   await page.getByRole("button", { name: "Clear" }).click();
-  await expect(page.getByRole("button", { name: "New research" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "New research", exact: true })).toBeEnabled();
 });
