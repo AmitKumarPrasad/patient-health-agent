@@ -32,10 +32,15 @@ export default function ResearchAssistant() {
   async function loadSessions() {
     try {
       const items = await api.researchSessions();
-      setSessions(items);
       setHasNextPage(items.length === pageSize);
-      if (items.length) setSession(await api.researchSession(items[0].id));
-      else setSession(await api.createResearchSession());
+      if (items.length) {
+        setSessions(items);
+        setSession(await api.researchSession(items[0].id));
+      } else {
+        const created = await api.createResearchSession();
+        setSessions([created]);
+        setSession(created);
+      }
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load research sessions"); }
     finally { setInitializing(false); }
   }
@@ -135,11 +140,26 @@ export default function ResearchAssistant() {
     setError("");
     try {
       await api.deleteResearchSession(id);
-      const remaining = sessions.filter((item) => item.id !== id);
-      setSessions(remaining);
+      let remaining = sessions.filter((item) => item.id !== id);
       if (session?.id === id) {
-        setSession(remaining.length ? await api.researchSession(remaining[0].id) : null);
+        if (!remaining.length) {
+          setHistoryQuery("");
+          setAppliedQuery("");
+          setHistoryPage(0);
+          remaining = await api.researchSessions("", 0, pageSize);
+          if (!remaining.length) {
+            const created = await api.createResearchSession();
+            remaining = [created];
+            setSession(created);
+          } else {
+            setSession(await api.researchSession(remaining[0].id));
+          }
+          setHasNextPage(remaining.length === pageSize);
+        } else {
+          setSession(await api.researchSession(remaining[0].id));
+        }
       }
+      setSessions(remaining);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete research session");
     }
