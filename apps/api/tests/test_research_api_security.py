@@ -143,3 +143,28 @@ def test_research_history_search_is_case_insensitive_and_owner_scoped(db_session
     assert [item["title"] for item in result.json()] == ["Cardiac screening"]
     assert client.get("/api/research/sessions", params={"q": "x" * 101}).status_code == 422
     assert client.get("/api/research/sessions", params={"q": "%"}).json() == []
+
+
+def test_research_history_pagination_is_stable_and_owner_scoped(db_session):
+    db_session.add_all([
+        ResearchSession(owner_subject="patient-a", title=f"Page {i:02d}")
+        for i in range(25)
+    ] + [
+        ResearchSession(owner_subject="patient-b", title="Other user's history")
+    ])
+    db_session.commit()
+    client = TestClient(_build_app(
+        db_session, {"sub": "patient-a", "realm_access": {"roles": ["patient"]}}
+    ))
+    first = client.get("/api/research/sessions", params={"limit": 10, "offset": 0})
+    second = client.get("/api/research/sessions", params={"limit": 10, "offset": 10})
+    third = client.get("/api/research/sessions", params={"limit": 10, "offset": 20})
+    assert first.status_code == 200
+    assert len(first.json()) == 10
+    assert len(second.json()) == 10
+    assert len(third.json()) == 5
+    all_ids = [entry["id"] for result in (first, second, third) for entry in result.json()]
+    assert len(set(all_ids)) == 25
+    assert all(entry["title"].startswith("Page ") for result in (first, second, third) for entry in result.json())
+    for params in ({"limit": 0}, {"limit": 51}, {"offset": -1}, {"offset": 100001}):
+        assert client.get("/api/research/sessions", params=params).status_code == 422
