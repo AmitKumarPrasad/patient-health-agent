@@ -30,6 +30,8 @@ export default function ResearchAssistant() {
   useEffect(() => { void loadSessions(); }, []);
 
   async function loadSessions() {
+    setInitializing(true);
+    setError("");
     try {
       const items = await api.researchSessions();
       setHasNextPage(items.length === pageSize);
@@ -101,13 +103,18 @@ export default function ResearchAssistant() {
     try {
       const created = await api.createResearchSession();
       setSession(created);
+      setSessions((current) => [created, ...current].slice(0, pageSize));
       setHistoryQuery("");
       setAppliedQuery("");
       setHistoryPage(0);
-      const items = await api.researchSessions("", 0, pageSize);
-      setHasNextPage(items.length === pageSize);
-      setSessions(items);
       setMessage("");
+      try {
+        const items = await api.researchSessions("", 0, pageSize);
+        setHasNextPage(items.length === pageSize);
+        setSessions(items);
+      } catch {
+        // Keep the newly created conversation usable when history refresh fails.
+      }
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to create session"); }
   }
 
@@ -196,6 +203,6 @@ export default function ResearchAssistant() {
         </form>
       </div>
     </div>
-    {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
+    {error && <div className="error" role="alert" style={{ marginTop: 12 }}>{error}{!session && <button type="button" onClick={() => void loadSessions()} style={{ marginLeft: 12 }}>Retry loading conversations</button>}</div>}
   </section>;
 }
