@@ -20,6 +20,10 @@ Answer only from the supplied public search context. Do not invent sources or UR
 """
 
 
+MAX_SEARCH_CONTEXT_CHARS = 12_000
+MAX_HISTORY_MESSAGE_CHARS = 2_000
+
+
 def is_safe_source_url(url: str) -> bool:
     if not url or len(url) > 1000 or any(char.isspace() or ord(char) < 32 or char == chr(92) for char in url):
         return False
@@ -68,11 +72,11 @@ def _source_metadata(results: Any) -> list[dict[str, str]]:
 def invoke_research_agent(request: str, history: list[dict[str, str]] | None = None) -> dict[str, Any]:
     search = get_web_search()
     results = search.invoke({"query": request})
-    context = str(results)
+    context = str(results)[:MAX_SEARCH_CONTEXT_CHARS]
     messages = [SystemMessage(content=SYSTEM_PROMPT)]
     for item in (history or [])[-10:]:
         role = item.get("role")
-        content = item.get("content", "")
+        content = str(item.get("content", ""))[:MAX_HISTORY_MESSAGE_CHARS]
         if role == "user":
             messages.append(HumanMessage(content=content))
         elif role == "assistant":
