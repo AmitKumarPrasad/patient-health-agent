@@ -1,37 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
-
-async function clickAndHandleDialog(
-  page: Page,
-  button: Locator,
-  action: "accept" | "dismiss",
-): Promise<string> {
-  let resolveDialog!: (message: string) => void;
-  let rejectDialog!: (error: Error) => void;
-  const handled = new Promise<string>((resolve, reject) => {
-    resolveDialog = resolve;
-    rejectDialog = reject;
-  });
-  const timeout = setTimeout(() => rejectDialog(new Error("Expected confirmation dialog did not open")), 10_000);
-
-  page.once("dialog", (dialog) => {
-    const message = dialog.message();
-    const actionPromise = action === "accept" ? dialog.accept() : dialog.dismiss();
-    void actionPromise.then(
-      () => {
-        clearTimeout(timeout);
-        resolveDialog(message);
-      },
-      (error: Error) => {
-        clearTimeout(timeout);
-        rejectDialog(error);
-      },
-    );
-  });
-
-  await button.click();
-  return handled;
-}
 
 function demoPatientCredentials() {
   const realm = JSON.parse(
@@ -63,7 +31,9 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
     const previousAppointment = previousTestAppointments.nth(index);
     const previousCancelButton = previousAppointment.getByRole("button", { name: "Cancel appointment" });
     if (await previousCancelButton.count()) {
-      await clickAndHandleDialog(page, previousCancelButton, "accept");
+      await previousCancelButton.click();
+      const previousConfirmation = page.getByRole("dialog", { name: "Cancel appointment?" });
+      await previousConfirmation.getByRole("button", { name: "Confirm cancellation" }).click();
       await expect(previousAppointment.getByText("cancelled", { exact: true })).toBeVisible();
     }
   }
@@ -113,18 +83,23 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   await expect(page.getByRole("button", { name: /10:00/ })).toBeVisible();
   await page.getByPlaceholder("Reason for visit (optional)").fill(e2eAppointmentReason);
   await page.getByRole("button", { name: /10:00/ }).click();
-  await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
-  await expect(appointments.getByText("10:00", { exact: false })).toBeVisible();
-  await expect(appointments.getByRole("button", { name: "Join video consultation" })).toBeVisible();
+  const bookedAppointment = appointments.locator(".list-item").filter({ hasText: e2eAppointmentReason });
+  await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
+  await expect(bookedAppointment.getByText("10:00", { exact: false })).toBeVisible();
+  await expect(bookedAppointment.getByRole("button", { name: "Join video consultation" })).toBeVisible();
 
-  const cancelButton = appointments.getByRole("button", { name: "Cancel appointment" });
-  const dismissedMessage = await clickAndHandleDialog(page, cancelButton, "dismiss");
-  expect(dismissedMessage).toMatch(/^Are you sure you want to cancel the appointment scheduled for /);
+  const cancelButton = bookedAppointment.getByRole("button", { name: "Cancel appointment" });
+  await cancelButton.click();
+  const cancellationDialog = page.getByRole("dialog", { name: "Cancel appointment?" });
+  await expect(cancellationDialog).toContainText(/^Are you sure you want to cancel the appointment scheduled for /);
+  await cancellationDialog.getByRole("button", { name: "Keep appointment" }).click();
 
-  await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
+  await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
   await expect(cancelButton).toBeVisible();
 
-  await clickAndHandleDialog(page, cancelButton, "accept");
-  await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(appointments.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
+  await cancelButton.click();
+  await page.getByRole("dialog", { name: "Cancel appointment?" })
+    .getByRole("button", { name: "Confirm cancellation" }).click();
+  await expect(bookedAppointment.getByText("cancelled", { exact: true })).toBeVisible();
+  await expect(bookedAppointment.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
