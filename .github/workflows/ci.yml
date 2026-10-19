@@ -107,6 +107,8 @@ jobs:
         run: docker compose up -d --build postgres keycloak mailpit minio api
       - name: Wait for API readiness
         run: curl --fail --retry 60 --retry-delay 2 --retry-connrefused --retry-all-errors http://localhost:8000/ready
+      - name: Verify deployed API with production smoke-check command
+        run: python3 ops/smoke/check_deployment.py http://localhost:8000 --allow-local-http
       - name: Wait for Keycloak readiness
         run: curl --fail --retry 60 --retry-delay 2 --retry-connrefused --retry-all-errors http://localhost:9002/health/ready
       - name: Install web dependencies
