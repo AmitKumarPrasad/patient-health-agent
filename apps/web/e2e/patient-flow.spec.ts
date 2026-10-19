@@ -74,7 +74,20 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   await expect(appointments.getByText("10:00", { exact: false })).toBeVisible();
   await expect(appointments.getByRole("button", { name: "Join video consultation" })).toBeVisible();
 
-  await appointments.getByRole("button", { name: "Cancel appointment" }).click();
+  const cancelButton = appointments.getByRole("button", { name: "Cancel appointment" });
+  const firstConfirmation = page.waitForEvent("dialog");
+  await cancelButton.click();
+  const dismissedDialog = await firstConfirmation;
+  expect(dismissedDialog.type()).toBe("confirm");
+  expect(dismissedDialog.message()).toMatch(/^Are you sure you want to cancel the appointment scheduled for /);
+  await dismissedDialog.dismiss();
+
+  await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
+  await expect(cancelButton).toBeVisible();
+
+  const acceptedConfirmation = page.waitForEvent("dialog");
+  await cancelButton.click();
+  await (await acceptedConfirmation).accept();
   await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
   await expect(appointments.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
