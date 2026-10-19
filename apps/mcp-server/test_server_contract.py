@@ -45,10 +45,12 @@ def test_mcp_server_supports_configurable_transports() -> None:
 
 def test_mcp_patient_tools_require_gateway_identity() -> None:
     source = SERVER_PATH.read_text(encoding="utf-8")
-    assert 'get_http_headers().get("x-patient-subject", "").strip()' in source
+    assert "from mcp.server.fastmcp import Context, FastMCP" in source
+    assert "context.request_context, \"request\"" in source
+    assert 'headers.get("x-patient-subject", "").strip()' in source
     assert "Authenticated patient context is required" in source
-    assert "def patient_records(query: str = \"\")" in source
-    assert "def book_slot(" in source
+    assert 'def patient_records(query: str = "", context: Context | None = None)' in source
+    assert "context: Context | None = None" in source
     assert "subject: str" not in source
 
 

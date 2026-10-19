@@ -5,8 +5,7 @@ import sys
 from datetime import date, datetime
 from uuid import UUID
 
-from mcp.server.dependencies import get_http_headers
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 sys.path.append(os.path.abspath("../api"))
 
@@ -20,9 +19,11 @@ from app.services.record_tools import search_patient_documents
 mcp = FastMCP("patient-health-agent", stateless_http=True, json_response=True)
 
 
-def _authenticated_subject() -> str:
+def _authenticated_subject(context: Context) -> str:
     """Read the patient identity injected by the authenticated API gateway."""
-    subject = get_http_headers().get("x-patient-subject", "").strip()
+    request = getattr(context.request_context, "request", None)
+    headers = getattr(request, "headers", {})
+    subject = headers.get("x-patient-subject", "").strip()
     if not subject:
         raise PermissionError("Authenticated patient context is required")
     return subject
@@ -79,9 +80,11 @@ def available_slots(provider_id: str, requested_date: str) -> list[dict]:
 
 
 @mcp.tool()
-def patient_records(query: str = "") -> list[dict]:
+def patient_records(query: str = "", context: Context | None = None) -> list[dict]:
     """Search record metadata for the authenticated patient."""
-    subject = _authenticated_subject()
+    subject = _authenticated_subject(context) if context is not None else ""
+    if not subject:
+        raise PermissionError("Authenticated patient context is required")
     with SessionLocal() as db:
         patient = require_patient_by_external_id(db, subject)
         try:
@@ -99,9 +102,12 @@ def book_slot(
     starts_at: str,
     ends_at: str,
     reason: str = "",
+    context: Context | None = None,
 ) -> dict:
     """Book an appointment for the authenticated patient through the validated service layer."""
-    subject = _authenticated_subject()
+    subject = _authenticated_subject(context) if context is not None else ""
+    if not subject:
+        raise PermissionError("Authenticated patient context is required")
     with SessionLocal() as db:
         patient = require_patient_by_external_id(db, subject)
         result = book_appointment(
