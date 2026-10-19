@@ -1,5 +1,37 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
+
+async function clickAndHandleDialog(
+  page: Page,
+  button: Locator,
+  action: "accept" | "dismiss",
+): Promise<string> {
+  let resolveDialog!: (message: string) => void;
+  let rejectDialog!: (error: Error) => void;
+  const handled = new Promise<string>((resolve, reject) => {
+    resolveDialog = resolve;
+    rejectDialog = reject;
+  });
+  const timeout = setTimeout(() => rejectDialog(new Error("Expected confirmation dialog did not open")), 10_000);
+
+  page.once("dialog", (dialog) => {
+    const message = dialog.message();
+    const actionPromise = action === "accept" ? dialog.accept() : dialog.dismiss();
+    void actionPromise.then(
+      () => {
+        clearTimeout(timeout);
+        resolveDialog(message);
+      },
+      (error: Error) => {
+        clearTimeout(timeout);
+        rejectDialog(error);
+      },
+    );
+  });
+
+  await button.click();
+  return handled;
+}
 
 function demoPatientCredentials() {
   const realm = JSON.parse(
@@ -23,6 +55,18 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
 
   await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Find a provider" })).toBeVisible();
+
+  const appointments = page.locator("#appointments");
+  const e2eAppointmentReason = "Synthetic Playwright cancellation retry check";
+  const previousTestAppointments = appointments.locator(".list-item").filter({ hasText: e2eAppointmentReason });
+  for (let index = 0; index < await previousTestAppointments.count(); index += 1) {
+    const previousAppointment = previousTestAppointments.nth(index);
+    const previousCancelButton = previousAppointment.getByRole("button", { name: "Cancel appointment" });
+    if (await previousCancelButton.count()) {
+      await clickAndHandleDialog(page, previousCancelButton, "accept");
+      await expect(previousAppointment.getByText("cancelled", { exact: true })).toBeVisible();
+    }
+  }
 
   const records = page.locator("#records");
   const fileInput = records.locator("#record-file");
@@ -67,27 +111,20 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
 
   await page.locator('input[type="date"]').fill("2026-09-09");
   await expect(page.getByRole("button", { name: /10:00/ })).toBeVisible();
+  await page.getByPlaceholder("Reason for visit (optional)").fill(e2eAppointmentReason);
   await page.getByRole("button", { name: /10:00/ }).click();
-
-  const appointments = page.locator("#appointments");
   await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
   await expect(appointments.getByText("10:00", { exact: false })).toBeVisible();
   await expect(appointments.getByRole("button", { name: "Join video consultation" })).toBeVisible();
 
   const cancelButton = appointments.getByRole("button", { name: "Cancel appointment" });
-  const firstConfirmation = page.waitForEvent("dialog");
-  await cancelButton.click();
-  const dismissedDialog = await firstConfirmation;
-  expect(dismissedDialog.type()).toBe("confirm");
-  expect(dismissedDialog.message()).toMatch(/^Are you sure you want to cancel the appointment scheduled for /);
-  await dismissedDialog.dismiss();
+  const dismissedMessage = await clickAndHandleDialog(page, cancelButton, "dismiss");
+  expect(dismissedMessage).toMatch(/^Are you sure you want to cancel the appointment scheduled for /);
 
   await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
   await expect(cancelButton).toBeVisible();
 
-  const acceptedConfirmation = page.waitForEvent("dialog");
-  await cancelButton.click();
-  await (await acceptedConfirmation).accept();
+  await clickAndHandleDialog(page, cancelButton, "accept");
   await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
   await expect(appointments.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
