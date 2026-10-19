@@ -26,7 +26,7 @@ def chat(
     try:
         response = invoke_appointment_agent(payload.message, subject, request_id)
     except LookupError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise HTTPException(status_code=403, detail="Not authorized to use the AI assistant") from exc
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="AI assistant is temporarily unavailable") from exc
     return AgentResponse(response=response)
