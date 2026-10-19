@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     postgres_db: str = "patient_health"
     postgres_user: str = "patient_health"
     postgres_password: str = "patient_health"
+    postgres_connect_timeout_seconds: int = Field(default=10, gt=0, le=120)
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-luna"
