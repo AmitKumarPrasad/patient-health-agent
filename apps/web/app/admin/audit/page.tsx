@@ -163,7 +163,7 @@ export default function AdminAuditPage() {
         </div>
       </div>
 
-      {processMessage && <p className="success">{processMessage}</p>}
+      {processMessage && <p className="success" role="status">{processMessage}</p>}
 
       <form className="card filter-grid" onSubmit={applyFilters}>
         <label>Action<input value={action} onChange={(e) => setAction(e.target.value)} placeholder="appointment.booked" /></label>
@@ -173,7 +173,7 @@ export default function AdminAuditPage() {
         <button className="button" disabled={loading}>{loading ? "Loading…" : "Apply filters"}</button>
       </form>
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
 
       <section className="card table-wrap" aria-label="Audit events">
         <div className="table-title">
