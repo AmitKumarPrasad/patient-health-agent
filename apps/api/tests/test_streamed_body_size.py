@@ -45,7 +45,10 @@ def test_streamed_request_within_limit_reaches_app_unchanged(monkeypatch) -> Non
             return messages.pop(0)
         return {"type": "http.disconnect"}
 
-    async def app(scope, app_receive, send) -> None:
+    async def send(message: dict) -> None:
+        response_messages.append(message)
+
+    async def app(scope, app_receive, app_send) -> None:
         nonlocal app_called
         app_called = True
         while True:
@@ -55,11 +58,11 @@ def test_streamed_request_within_limit_reaches_app_unchanged(monkeypatch) -> Non
             received_body.extend(message.get("body", b""))
             if not message.get("more_body", False):
                 break
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b"ok"})
+        await app_send({"type": "http.response.start", "status": 200, "headers": []})
+        await app_send({"type": "http.response.body", "body": b"ok"})
 
     async def run() -> None:
-        await RequestBodySizeLimitMiddleware(app)(_scope(), receive, response_messages.append)
+        await RequestBodySizeLimitMiddleware(app)(_scope(), receive, send)
 
     asyncio.run(run())
 
@@ -93,5 +96,6 @@ def test_streamed_request_over_limit_returns_413_without_calling_app(monkeypatch
 
     assert not app_called
     assert response_messages[0]["status"] == 413
-    assert response_messages[0]["headers"][-1] == (b"x-request-id", b"test-request-id")
+    response_headers = dict(response_messages[0]["headers"])
+    assert response_headers[b"x-request-id"] == b"test-request-id"
     assert json.loads(response_messages[1]["body"]) == {"detail": "Request body too large"}
