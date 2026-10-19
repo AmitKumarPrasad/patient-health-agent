@@ -22,7 +22,7 @@ def check_endpoint(base_url: str, path: str, expected: str, timeout: float = 10)
         raise RuntimeError(f"{path}: request failed ({type(exc).__name__})") from None
     if status != 200:
         raise RuntimeError(f"{path}: expected HTTP 200, got {status}")
-    if "no-store" not in cache_control.lower().split(",") and "no-store" not in [part.strip().lower() for part in cache_control.split(",")]:
+    if "no-store" not in [part.strip().lower() for part in cache_control.split(",")]:
         raise RuntimeError(f"{path}: missing no-store cache protection")
     if frame_options.upper() != "DENY":
         raise RuntimeError(f"{path}: missing DENY clickjacking protection")
