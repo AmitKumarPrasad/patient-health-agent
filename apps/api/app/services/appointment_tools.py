@@ -57,16 +57,15 @@ def get_available_slots(
             Appointment.status.in_((AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED)),
         )
     ).all()
-    booked_starts = {appointment.starts_at for appointment in booked}
-
-    return [
-        {
-            "start": datetime.combine(requested_date, slot.start_time, tzinfo=timezone.utc).isoformat(),
-            "end": datetime.combine(requested_date, slot.end_time, tzinfo=timezone.utc).isoformat(),
-        }
-        for slot in slots
-        if datetime.combine(requested_date, slot.start_time, tzinfo=timezone.utc) not in booked_starts
-    ]
+    result = []
+    for slot in slots:
+        slot_start = datetime.combine(requested_date, slot.start_time, tzinfo=timezone.utc)
+        slot_end = datetime.combine(requested_date, slot.end_time, tzinfo=timezone.utc)
+        # Any overlap blocks the slot, even when the booking begins before it.
+        if any(booking.starts_at < slot_end and booking.ends_at > slot_start for booking in booked):
+            continue
+        result.append({"start": slot_start.isoformat(), "end": slot_end.isoformat()})
+    return result
 
 
 def book_appointment(
