@@ -69,6 +69,7 @@ test("research responses are announced in an accessible conversation log", async
   const log = page.getByRole("log", { name: "Research conversation" });
   await expect(log).toBeVisible();
   await expect(log).toHaveAttribute("aria-live", "polite");
+  await expect(log).toHaveAttribute("aria-atomic", "false");
   await expect(log).toHaveAttribute("aria-relevant", "additions text");
   await expect(log).toHaveAttribute("aria-busy", "false");
 
