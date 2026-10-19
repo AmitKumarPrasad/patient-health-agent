@@ -1,6 +1,5 @@
 """Tests for the standalone deployment smoke check."""
 import importlib.util
-import io
 import json
 from pathlib import Path
 from unittest.mock import patch
