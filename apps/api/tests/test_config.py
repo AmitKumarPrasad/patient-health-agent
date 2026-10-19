@@ -11,6 +11,7 @@ def test_default_security_timing_configuration_is_valid() -> None:
     assert settings.rate_limit_requests == 120
     assert settings.rate_limit_window_seconds == 60
     assert settings.max_request_body_bytes == 12 * 1024 * 1024
+    assert settings.postgres_connect_timeout_seconds == 10
 
 
 @pytest.mark.parametrize(
@@ -20,6 +21,8 @@ def test_default_security_timing_configuration_is_valid() -> None:
         ("rate_limit_window_seconds", 0),
         ("rate_limit_requests", -1),
         ("max_request_body_bytes", 0),
+        ("postgres_connect_timeout_seconds", 0),
+        ("postgres_connect_timeout_seconds", 121),
     ],
 )
 def test_invalid_security_timing_configuration_is_rejected(field: str, value: int) -> None:
