@@ -348,7 +348,8 @@ export default function Home() {
           <div className="card" id="assistant">
             <h2>AI appointment assistant</h2>
             <form className="chat" onSubmit={askAssistant}>
-              <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. Find me a cardiologist and help me book an appointment." />
+              <label htmlFor="appointment-assistant-question">Question for appointment assistant</label>
+              <textarea id="appointment-assistant-question" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. Find me a cardiologist and help me book an appointment." />
               <button disabled={loading}>{loading ? "Working…" : "Ask assistant"}</button>
             </form>
             {answer && <div className="chat-answer" style={{ marginTop: 12 }}>{answer}</div>}
@@ -394,7 +395,8 @@ export default function Home() {
               <div className="record-panel">
                 <h3>Record assistant</h3>
                 <form className="chat" onSubmit={askRecordAssistant}>
-                  <textarea value={recordMessage} onChange={(event) => setRecordMessage(event.target.value)} placeholder="e.g. Find my latest lab report." />
+                  <label htmlFor="record-assistant-question">Question about my records</label>
+                  <textarea id="record-assistant-question" value={recordMessage} onChange={(event) => setRecordMessage(event.target.value)} placeholder="e.g. Find my latest lab report." />
                   <button disabled={recordLoading}>{recordLoading ? "Searching…" : "Ask about my records"}</button>
                 </form>
                 {recordAnswer && <div className="chat-answer" style={{ marginTop: 12 }}>{recordAnswer}</div>}
