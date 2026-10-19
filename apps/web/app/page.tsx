@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, Appointment, Availability, Patient, PatientDocument, Provider } from "../lib/api";
 import { useAuth } from "./providers";
 
@@ -55,6 +55,9 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [documentAction, setDocumentAction] = useState<string | null>(null);
   const [consultationAction, setConsultationAction] = useState<string | null>(null);
+  const [cancellationPending, setCancellationPending] = useState<Appointment | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const cancellationDialogRef = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState("");
   const [recordError, setRecordError] = useState("");
 
@@ -62,6 +65,13 @@ export default function Home() {
     if (!auth.ready || !auth.authenticated) return;
     void loadDashboard();
   }, [auth.ready, auth.authenticated]);
+
+  useEffect(() => {
+    const dialog = cancellationDialogRef.current;
+    if (!dialog) return;
+    if (cancellationPending && !dialog.open) dialog.showModal();
+    if (!cancellationPending && dialog.open) dialog.close();
+  }, [cancellationPending]);
 
   async function loadDashboard() {
     setLoading(true);
@@ -132,13 +142,25 @@ export default function Home() {
     }
   }
 
-  async function cancel(appointment: Appointment) {
+  function cancel(appointment: Appointment) {
+    setError("");
+    setCancellationPending(appointment);
+  }
+
+  async function confirmCancellation() {
+    if (!cancellationPending) return;
+    const appointment = cancellationPending;
+    setCancelling(appointment.id);
     setError("");
     try {
       await api.updateStatus(appointment.id, "cancelled");
       setAppointments(await api.appointments());
+      setCancellationPending(null);
     } catch (err) {
+      setCancellationPending(null);
       setError(err instanceof Error ? err.message : "Unable to cancel appointment");
+    } finally {
+      setCancelling(null);
     }
   }
 
@@ -442,6 +464,43 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      <dialog
+        ref={cancellationDialogRef}
+        className="confirm-dialog"
+        aria-labelledby="cancel-appointment-title"
+        aria-describedby="cancel-appointment-description"
+        onCancel={(event) => {
+          event.preventDefault();
+          setCancellationPending(null);
+        }}
+      >
+        <h2 id="cancel-appointment-title">Cancel appointment?</h2>
+        <p id="cancel-appointment-description">
+          {cancellationPending
+            ? `Are you sure you want to cancel the appointment scheduled for ${formatDate(cancellationPending.starts_at)}?`
+            : ""}
+        </p>
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="secondary"
+            autoFocus
+            disabled={cancelling === cancellationPending?.id}
+            onClick={() => setCancellationPending(null)}
+          >
+            Keep appointment
+          </button>
+          <button
+            type="button"
+            className="danger"
+            disabled={!cancellationPending || cancelling === cancellationPending.id}
+            onClick={() => void confirmCancellation()}
+          >
+            {cancelling === cancellationPending?.id ? "Cancelling…" : "Confirm cancellation"}
+          </button>
+        </div>
+      </dialog>
     </main>
   );
 }

@@ -24,6 +24,20 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Find a provider" })).toBeVisible();
 
+  const appointments = page.locator("#appointments");
+  const e2eAppointmentReason = "Synthetic Playwright cancellation retry check";
+  const previousTestAppointments = appointments.locator(".list-item").filter({ hasText: e2eAppointmentReason });
+  for (let index = 0; index < await previousTestAppointments.count(); index += 1) {
+    const previousAppointment = previousTestAppointments.nth(index);
+    const previousCancelButton = previousAppointment.getByRole("button", { name: "Cancel appointment" });
+    if (await previousCancelButton.count()) {
+      await previousCancelButton.click();
+      const previousConfirmation = page.getByRole("dialog", { name: "Cancel appointment?" });
+      await previousConfirmation.getByRole("button", { name: "Confirm cancellation" }).click();
+      await expect(previousAppointment.getByText("cancelled", { exact: true })).toBeVisible();
+    }
+  }
+
   const records = page.locator("#records");
   const fileInput = records.locator("#record-file");
   const retry = test.info().retry;
@@ -67,14 +81,31 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
 
   await page.locator('input[type="date"]').fill("2026-09-09");
   await expect(page.getByRole("button", { name: /10:00/ })).toBeVisible();
+  await page.getByPlaceholder("Reason for visit (optional)").fill(e2eAppointmentReason);
   await page.getByRole("button", { name: /10:00/ }).click();
+  const bookedAppointment = appointments.locator(".list-item")
+    .filter({ hasText: e2eAppointmentReason })
+    .filter({ hasText: /scheduled/ });
+  await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
+  await expect(bookedAppointment.getByText("10:00", { exact: false })).toBeVisible();
+  await expect(bookedAppointment.getByRole("button", { name: "Join video consultation" })).toBeVisible();
 
-  const appointments = page.locator("#appointments");
-  await expect(appointments.getByText("scheduled", { exact: true })).toBeVisible();
-  await expect(appointments.getByText("10:00", { exact: false })).toBeVisible();
-  await expect(appointments.getByRole("button", { name: "Join video consultation" })).toBeVisible();
+  const cancelButton = bookedAppointment.getByRole("button", { name: "Cancel appointment" });
+  await cancelButton.click();
+  const cancellationDialog = page.getByRole("dialog", { name: "Cancel appointment?" });
+  await expect(cancellationDialog.locator("#cancel-appointment-description"))
+    .toHaveText(/^Are you sure you want to cancel the appointment scheduled for .+\?$/);
+  await cancellationDialog.getByRole("button", { name: "Keep appointment" }).click();
 
-  await appointments.getByRole("button", { name: "Cancel appointment" }).click();
-  await expect(appointments.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(appointments.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
+  await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
+  await expect(cancelButton).toBeVisible();
+
+  await cancelButton.click();
+  await page.getByRole("dialog", { name: "Cancel appointment?" })
+    .getByRole("button", { name: "Confirm cancellation" }).click();
+  const cancelledAppointment = appointments.locator(".list-item")
+    .filter({ hasText: e2eAppointmentReason })
+    .filter({ hasText: /cancelled/ });
+  await expect(cancelledAppointment.getByText("cancelled", { exact: true })).toBeVisible();
+  await expect(cancelledAppointment.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
