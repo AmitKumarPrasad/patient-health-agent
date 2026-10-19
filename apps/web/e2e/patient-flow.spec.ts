@@ -83,7 +83,9 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   await expect(page.getByRole("button", { name: /10:00/ })).toBeVisible();
   await page.getByPlaceholder("Reason for visit (optional)").fill(e2eAppointmentReason);
   await page.getByRole("button", { name: /10:00/ }).click();
-  const bookedAppointment = appointments.locator(".list-item").filter({ hasText: e2eAppointmentReason });
+  const bookedAppointment = appointments.locator(".list-item")
+    .filter({ hasText: e2eAppointmentReason })
+    .filter({ hasText: /scheduled/ });
   await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
   await expect(bookedAppointment.getByText("10:00", { exact: false })).toBeVisible();
   await expect(bookedAppointment.getByRole("button", { name: "Join video consultation" })).toBeVisible();
@@ -91,7 +93,8 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   const cancelButton = bookedAppointment.getByRole("button", { name: "Cancel appointment" });
   await cancelButton.click();
   const cancellationDialog = page.getByRole("dialog", { name: "Cancel appointment?" });
-  await expect(cancellationDialog).toContainText(/^Are you sure you want to cancel the appointment scheduled for /);
+  await expect(cancellationDialog.locator("#cancel-appointment-description"))
+    .toHaveText(/^Are you sure you want to cancel the appointment scheduled for .+\?$/);
   await cancellationDialog.getByRole("button", { name: "Keep appointment" }).click();
 
   await expect(bookedAppointment.getByText("scheduled", { exact: true })).toBeVisible();
@@ -100,6 +103,9 @@ test("patient can sign in, manage records, book, join, and cancel an appointment
   await cancelButton.click();
   await page.getByRole("dialog", { name: "Cancel appointment?" })
     .getByRole("button", { name: "Confirm cancellation" }).click();
-  await expect(bookedAppointment.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(bookedAppointment.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
+  const cancelledAppointment = appointments.locator(".list-item")
+    .filter({ hasText: e2eAppointmentReason })
+    .filter({ hasText: /cancelled/ });
+  await expect(cancelledAppointment.getByText("cancelled", { exact: true })).toBeVisible();
+  await expect(cancelledAppointment.getByRole("button", { name: "Join video consultation" })).not.toBeVisible();
 });
