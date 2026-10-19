@@ -15,9 +15,15 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/health/db")
-def database_health(db: Session = Depends(get_db)) -> dict[str, str]:
-    db.execute(text("SELECT 1"))
+@router.get("/health/db", response_model=None)
+def database_health(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "database": "unreachable"},
+        )
     return {"status": "ok", "database": "reachable"}
 
 
