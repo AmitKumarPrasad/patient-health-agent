@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, Appointment, Availability, Patient, PatientDocument, Provider } from "../lib/api";
 import { useAuth } from "./providers";
 
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
     dateStyle: "medium",
@@ -223,6 +225,11 @@ export default function Home() {
   async function uploadRecord(event: FormEvent) {
     event.preventDefault();
     if (!selectedFile) return;
+    if (selectedFile.size > MAX_DOCUMENT_BYTES) {
+      setSelectedFile(null);
+      setRecordError("This file is larger than the 10 MB upload limit. Choose a smaller file.");
+      return;
+    }
     setUploading(true);
     setRecordError("");
     try {
@@ -354,12 +361,30 @@ export default function Home() {
                 <p className="muted">Upload your own records and ask the record assistant to find relevant information.</p>
               </div>
             </div>
-            {recordError && <div className="error" style={{ marginBottom: 14 }}>{recordError}</div>}
+            {recordError && <div className="error" role="alert" style={{ marginBottom: 14 }}>{recordError}</div>}
             <div className="records-grid">
               <div className="record-panel">
                 <h3>Upload a record</h3>
                 <form className="chat" onSubmit={uploadRecord}>
-                  <input id="record-file" type="file" accept="application/pdf,image/jpeg,image/png,text/plain" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
+                  <label htmlFor="record-file">Choose a record</label>
+                  <input
+                    id="record-file"
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,text/plain"
+                    aria-describedby="record-file-help"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      setRecordError("");
+                      if (file && file.size > MAX_DOCUMENT_BYTES) {
+                        event.currentTarget.value = "";
+                        setSelectedFile(null);
+                        setRecordError("This file is larger than the 10 MB upload limit. Choose a smaller file.");
+                        return;
+                      }
+                      setSelectedFile(file);
+                    }}
+                  />
+                  <p id="record-file-help" className="muted">PDF, JPG, PNG, or text files up to 10 MB.</p>
                   <input value={uploadCategory} onChange={(event) => setUploadCategory(event.target.value)} placeholder="Category, e.g. lab report" />
                   <input value={uploadDescription} onChange={(event) => setUploadDescription(event.target.value)} placeholder="Short description (optional)" />
                   <button disabled={!selectedFile || uploading}>{uploading ? "Uploading…" : "Upload record"}</button>
