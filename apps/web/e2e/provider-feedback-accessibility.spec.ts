@@ -50,4 +50,5 @@ test("provider availability success is announced to assistive technology", async
   await page.getByRole("button", { name: "Add slot", exact: true }).click();
 
   await expect(page.getByRole("status")).toHaveText("Availability slot added.");
+  await expect(page.getByRole("status")).toHaveAttribute("aria-live", "polite");
 });
