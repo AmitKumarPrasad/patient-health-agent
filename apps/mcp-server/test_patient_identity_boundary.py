@@ -13,11 +13,18 @@ class _FakeSession:
         return False
 
 
+def _context(headers):
+    return SimpleNamespace(
+        request_context=SimpleNamespace(
+            request=SimpleNamespace(headers=headers),
+        ),
+    )
+
+
 def test_patient_records_uses_only_authenticated_gateway_subject(monkeypatch) -> None:
     calls = {}
     session = _FakeSession()
 
-    monkeypatch.setattr(server, "get_http_headers", lambda: {"x-patient-subject": " patient-a "})
     monkeypatch.setattr(server, "SessionLocal", lambda: session)
     monkeypatch.setattr(
         server,
@@ -32,15 +39,28 @@ def test_patient_records_uses_only_authenticated_gateway_subject(monkeypatch) ->
     )
     monkeypatch.setattr(server, "_audit_record_search", lambda *args: None)
 
-    result = server.patient_records("synthetic records query")
+    result = server.patient_records(
+        "synthetic records query",
+        _context({"x-patient-subject": " patient-a "}),
+    )
 
     assert result == [{"document_id": "synthetic-doc"}]
     assert calls["patient_lookup"] == (session, "patient-a")
     assert calls["search"] == ("synthetic records query", "patient-a")
 
 
-def test_patient_records_rejects_missing_gateway_identity_before_database_access(monkeypatch) -> None:
-    monkeypatch.setattr(server, "get_http_headers", lambda: {})
+@pytest.mark.parametrize(
+    "context",
+    [
+        None,
+        _context({}),
+        _context({"x-patient-subject": "   "}),
+    ],
+)
+def test_patient_records_rejects_missing_gateway_identity_before_database_access(
+    monkeypatch,
+    context,
+) -> None:
     monkeypatch.setattr(
         server,
         "SessionLocal",
@@ -48,4 +68,4 @@ def test_patient_records_rejects_missing_gateway_identity_before_database_access
     )
 
     with pytest.raises(PermissionError, match="Authenticated patient context is required"):
-        server.patient_records("synthetic records query")
+        server.patient_records("synthetic records query", context)
