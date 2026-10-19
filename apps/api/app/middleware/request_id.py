@@ -30,7 +30,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(PROCESS_TIME_HEADER, str(elapsed_ms))
 
         route = request.scope.get("route")
-        route_template = getattr(route, "path", request.url.path)
+        # Never use a raw, unmatched URL as a metric label: clients can send
+        # arbitrary paths and create an unbounded number of Prometheus series.
+        route_template = getattr(route, "path", "<unmatched>")
         observe_http_request(
             method=request.method,
             route=route_template,
