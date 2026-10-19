@@ -1,5 +1,5 @@
 from functools import lru_cache
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -97,8 +97,10 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        username = quote(self.postgres_user, safe="")
+        password = quote(self.postgres_password, safe="")
         return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg://{username}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
