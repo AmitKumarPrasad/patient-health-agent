@@ -146,8 +146,8 @@ export default function ProviderDashboard() {
           <p className="subtitle">Manage your appointment schedule and review patient records only for patients with an active or historical appointment relationship.</p>
         </section>
 
-        {error && <div className="error" style={{ marginBottom: 18 }}>{error}</div>}
-        {message && <div className="success" style={{ marginBottom: 18 }}>{message}</div>}
+        {error && <div className="error" role="alert" aria-live="assertive" style={{ marginBottom: 18 }}>{error}</div>}
+        {message && <div className="success" role="status" aria-live="polite" style={{ marginBottom: 18 }}>{message}</div>}
         {loading ? <p className="muted">Loading provider data…</p> : null}
 
         <section className="grid">
