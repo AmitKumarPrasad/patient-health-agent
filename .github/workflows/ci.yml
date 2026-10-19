@@ -146,6 +146,14 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:3000
         run: npx playwright test
+      - name: Upload Playwright failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_id }}
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 2
       - name: Show service logs on failure
         if: failure()
         run: |
