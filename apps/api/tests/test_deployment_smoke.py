@@ -49,7 +49,12 @@ def test_endpoint_checks_status_and_payload():
 def test_endpoint_rejects_not_ready_response():
     class Response:
         status = 200
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "X-Frame-Options": "DENY",
+            "X-Content-Type-Options": "nosniff",
+        }
         def __enter__(self):
             return self
         def __exit__(self, *args):
