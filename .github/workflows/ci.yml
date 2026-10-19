@@ -94,12 +94,14 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Start E2E backend services
+        timeout-minutes: 10
         run: docker compose up -d --build postgres keycloak mailpit minio api
       - name: Wait for API readiness
         run: curl --fail --retry 60 --retry-delay 2 --retry-connrefused --retry-all-errors http://localhost:8000/ready
@@ -133,9 +135,11 @@ jobs:
           sudo rm -f /etc/apt/sources.list.d/google-chrome.sources
           sudo rm -f /etc/apt/sources.list.d/google-chrome.list
       - name: Install Playwright Chromium
+        timeout-minutes: 8
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
       - name: Run Playwright E2E tests
+        timeout-minutes: 8
         working-directory: apps/web
         env:
           E2E_BASE_URL: http://localhost:3000
