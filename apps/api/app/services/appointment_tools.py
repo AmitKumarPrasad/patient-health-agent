@@ -86,7 +86,9 @@ def book_appointment(
         raise ValueError("Appointment end must be after appointment start")
 
     patient = db.get(Patient, patient_id)
-    provider = db.get(Provider, provider_id)
+    # Serialize every booking for this provider, including bookings in overlapping availability rows.
+    # PostgreSQL holds the provider row lock until the transaction commits.
+    provider = db.scalar(select(Provider).where(Provider.id == provider_id).with_for_update())
     if patient is None:
         raise ValueError("Patient not found")
     if provider is None:
