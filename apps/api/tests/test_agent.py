@@ -42,3 +42,19 @@ def test_agent_chat_does_not_disclose_provider_exception_details(monkeypatch) ->
     assert response.json()["detail"] == "AI assistant is temporarily unavailable"
     assert "synthetic-secret" not in response.text
     assert "private.local" not in response.text
+
+
+def test_agent_chat_does_not_disclose_identity_lookup_details(monkeypatch) -> None:
+    def _raise_missing_identity(message: str, subject: str, request_id: str | None = None) -> str:
+        raise LookupError("unmapped patient subject=synthetic-private-identity")
+
+    monkeypatch.setattr(agent, "invoke_appointment_agent", _raise_missing_identity)
+    app.dependency_overrides[agent.get_current_user] = lambda: {"sub": "test-patient-subject"}
+    try:
+        response = client.post("/api/agent/chat", json={"message": "Find an appointment"})
+    finally:
+        app.dependency_overrides.pop(agent.get_current_user, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not authorized to use the AI assistant"
+    assert "synthetic-private-identity" not in response.text
