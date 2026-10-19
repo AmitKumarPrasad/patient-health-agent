@@ -100,6 +100,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
       - name: Start E2E backend services
         timeout-minutes: 10
         run: docker compose up -d --build postgres keycloak mailpit minio api
