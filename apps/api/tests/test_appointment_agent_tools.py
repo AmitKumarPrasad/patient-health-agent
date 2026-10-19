@@ -1,6 +1,8 @@
 from datetime import date, datetime, time, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+from sqlalchemy.dialects import postgresql
 from uuid import uuid4
 
 import pytest
@@ -58,3 +60,23 @@ def test_available_slots_exclude_any_overlapping_booking(
     result = get_available_slots(db, uuid4(), day)
 
     assert [item["start"][11:16] for item in result] == expected_starts
+
+
+def test_booking_locks_provider_before_overlap_check() -> None:
+    provider_id = uuid4()
+    db = MagicMock()
+    db.get.return_value = object()  # Synthetic patient exists.
+    db.scalar.side_effect = [object(), object()]  # Provider exists, overlap detected.
+    db.scalars.return_value.first.return_value = object()  # Available slot exists.
+    starts_at = datetime(2026, 11, 11, 10, tzinfo=timezone.utc)
+    ends_at = datetime(2026, 11, 11, 10, 30, tzinfo=timezone.utc)
+
+    with pytest.raises(ValueError, match="already booked"):
+        book_appointment(db, uuid4(), provider_id, starts_at, ends_at)
+
+    provider_query = db.scalar.call_args_list[0].args[0]
+    provider_sql = str(provider_query.compile(dialect=postgresql.dialect()))
+    assert "FROM providers" in provider_sql
+    assert "FOR UPDATE" in provider_sql
+    assert db.scalar.call_count == 2
+    db.commit.assert_not_called()
