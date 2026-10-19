@@ -33,7 +33,7 @@ def test_allow_local_http_only_with_flag():
 def test_endpoint_checks_status_and_payload():
     class Response:
         status = 200
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "Cache-Control": "no-store", "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff"}
         def __enter__(self):
             return self
         def __exit__(self, *args):
@@ -60,3 +60,19 @@ def test_endpoint_rejects_not_ready_response():
     with patch.object(smoke, "urlopen", return_value=Response()):
         with pytest.raises(RuntimeError, match="unexpected health status"):
             smoke.check_endpoint("https://api.example.com", "/ready", "ready")
+
+
+def test_endpoint_rejects_missing_security_headers():
+    class Response:
+        status = 200
+        headers = {"Content-Type": "application/json"}
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def read(self, maximum):
+            return b'{"status":"ok"}'
+
+    with patch.object(smoke, "urlopen", return_value=Response()):
+        with pytest.raises(RuntimeError, match="missing no-store cache protection"):
+            smoke.check_endpoint("https://api.example.com", "/health", "ok")
