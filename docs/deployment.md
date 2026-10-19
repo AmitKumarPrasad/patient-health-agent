@@ -39,3 +39,23 @@ docker compose run --rm api python -m app.workers.reindex_documents
 The application resolves patient/provider identity from Keycloak and applies authorization in the backend services. AI agents are not granted direct database credentials or unrestricted object-storage access. Clinical record access by providers is limited to patients with an active or completed appointment relationship and produces an audit event.
 
 AI features are workflow and information-retrieval aids. They are not diagnostic or treatment-decision systems.
+
+
+## Deployment smoke check
+
+After deploying the API, run the no-credentials health/readiness probe:
+
+```bash
+python3 ops/smoke/check_deployment.py https://api.example.com
+```
+
+For a developer-only loopback instance (never for a public HTTP endpoint):
+
+```bash
+python3 ops/smoke/check_deployment.py http://localhost:8000 --allow-local-http
+```
+
+The probe checks `/health` and `/ready`, requires HTTP 200 with JSON statuses
+`ok` and `ready`, and exits nonzero on failure. It does **not** validate
+authentication, Keycloak, document storage, patient workflows or AI output.
+Complete these separately with synthetic test accounts before handling real patient data.
