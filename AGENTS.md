@@ -21,3 +21,6 @@ Three independent coding sessions or developers may work concurrently, **one bra
 2. Frontend integration PR against the merged contract.
 3. AI/QA tests/security PR; use mocks or feature flags to avoid cross-branch dependency.
 All three can progress in parallel on independent issues. Rebase each feature branch on the latest `main` before merge.
+
+## Reusable agent workflow
+Before repeated development work, read `.agents/skills/project-workflow/SKILL.md`. Follow its instructions to batch implementation and local verification before triggering CI, diagnose failures from logs, and automatically start the next ready independent task after a green build.
