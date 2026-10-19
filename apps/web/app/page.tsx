@@ -133,6 +133,11 @@ export default function Home() {
   }
 
   async function cancel(appointment: Appointment) {
+    const confirmed = window.confirm(
+      `Are you sure you want to cancel the appointment scheduled for ${formatDate(appointment.starts_at)}?`,
+    );
+    if (!confirmed) return;
+
     setError("");
     try {
       await api.updateStatus(appointment.id, "cancelled");
