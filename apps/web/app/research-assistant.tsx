@@ -200,6 +200,7 @@ export default function ResearchAssistant() {
           role="log"
           aria-label="Research conversation"
           aria-live="polite"
+          aria-atomic="false"
           aria-relevant="additions text"
           aria-busy={loading}
           style={{ minHeight: 180 }}
