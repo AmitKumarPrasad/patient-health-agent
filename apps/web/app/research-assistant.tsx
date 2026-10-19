@@ -196,7 +196,15 @@ export default function ResearchAssistant() {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 28%) 1fr", gap: 16, marginTop: 16 }}>
       <aside><strong>History</strong><form onSubmit={searchHistory} style={{ marginTop: 8 }}><input type="search" aria-label="Search research history" placeholder="Search conversation titles" value={historyQuery} maxLength={100} onChange={(event) => setHistoryQuery(event.target.value)} /><div style={{ display: "flex", gap: 6, marginTop: 6 }}><button type="submit" disabled={searchingHistory}>{searchingHistory ? "Searching…" : "Search"}</button><button type="button" onClick={() => void clearHistorySearch()} disabled={searchingHistory}>Clear</button></div></form>{sessions.length === 0 && <p className="muted">No matching conversations.</p>}{sessions.map((item) => <div key={item.id} style={{ display: "flex", gap: 4, marginTop: 8 }}><button type="button" onClick={() => void selectSession(item.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</button><button type="button" aria-label={`Rename ${item.title}`} title="Rename research conversation" onClick={() => void renameSession(item)}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} title="Delete research conversation" onClick={() => void deleteSession(item.id)}>Delete</button></div>)}<div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 12 }}><button type="button" disabled={searchingHistory || historyPage === 0} onClick={() => void changeHistoryPage(historyPage - 1)}>Previous</button><span aria-live="polite">Page {historyPage + 1}</span><button type="button" disabled={searchingHistory || !hasNextPage} onClick={() => void changeHistoryPage(historyPage + 1)}>Next</button></div></aside>
       <div>
-        <div style={{ minHeight: 180 }}>{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
+        <div
+          role="log"
+          aria-label="Research conversation"
+          aria-live="polite"
+          aria-atomic="false"
+          aria-relevant="additions text"
+          aria-busy={loading}
+          style={{ minHeight: 180 }}
+        >{session?.messages.length ? session.messages.map((item) => <MessageBubble key={item.id} message={item} />) : <p className="muted">Start a research conversation. Your session history is private to your authenticated account.</p>}</div>
         <form className="chat" onSubmit={submit}>
           <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. What is the difference between preventive and screening care?" maxLength={2000} disabled={loading || !session} />
           <button disabled={loading || !message.trim() || !session}>{loading ? "Researching…" : "Research"}</button>
