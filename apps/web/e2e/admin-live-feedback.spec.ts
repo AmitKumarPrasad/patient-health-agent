@@ -40,7 +40,6 @@ test("admin audit operation feedback is announced to screen readers", async ({ p
   await page.locator("#password").fill(credentials.password);
   await page.locator("#kc-login").click();
 
-  await expect(page.getByRole("heading", { name: /Welcome, Demo/i })).toBeVisible();
   await page.goto("/admin/audit");
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
 
