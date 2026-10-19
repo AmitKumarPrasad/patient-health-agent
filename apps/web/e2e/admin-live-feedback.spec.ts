@@ -48,5 +48,5 @@ test("admin audit operation feedback is announced to screen readers", async ({ p
   await expect(page.getByRole("status")).toHaveText("3 due notification(s) processed.");
 
   await processButton.click();
-  await expect(page.getByRole("alert")).toHaveText("Synthetic processing failure");
+  await expect(page.locator("p[role=\"alert\"]")).toHaveText("Synthetic processing failure");
 });
