@@ -14,11 +14,20 @@ def check_endpoint(base_url: str, path: str, expected: str, timeout: float = 10)
         with urlopen(request, timeout=timeout) as response:
             status = response.status
             content_type = response.headers.get("Content-Type", "")
+            cache_control = response.headers.get("Cache-Control", "")
+            frame_options = response.headers.get("X-Frame-Options", "")
+            content_type_options = response.headers.get("X-Content-Type-Options", "")
             body = response.read(4096)
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"{path}: request failed ({type(exc).__name__})") from None
     if status != 200:
         raise RuntimeError(f"{path}: expected HTTP 200, got {status}")
+    if "no-store" not in [part.strip().lower() for part in cache_control.split(",")]:
+        raise RuntimeError(f"{path}: missing no-store cache protection")
+    if frame_options.upper() != "DENY":
+        raise RuntimeError(f"{path}: missing DENY clickjacking protection")
+    if content_type_options.lower() != "nosniff":
+        raise RuntimeError(f"{path}: missing nosniff MIME protection")
     if "application/json" not in content_type.lower():
         raise RuntimeError(f"{path}: expected JSON response")
     try:
